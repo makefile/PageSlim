@@ -5,9 +5,10 @@ int doSlimSave(char *url,char *dir,char *name){
 	char command[200];
 	int status;
 	char workdir[]="/etc/pageSlim/";//but if i was run as daemon,maybe changed to work in /var/log for create sys logs
-	sprintf(command,"python %sdoSlim.py %s %s %s",
+	sprintf(command,"python %sdoSlim.py '%s' %s %s",
 			workdir,url,dir,name);
-	//info(command);
+//use single ' is for that linux shell won't take it as a back job if the url include symbol '&'
+//	info(command);
 	status=system(command);//system is different from exc series fun,for system will block the parent process
 	//doSlim.py add the webpage name to a table,simplily just append to a file:newest
 	if(strcmp(name,"default")==0){
@@ -33,19 +34,28 @@ void responseDoSlim(FILE *client,char *req){
 	//handle request:doslim?url=xxx&dir=xxx&name=xxx
 	//save the content to the named file,if name=default,in doSlim.py find the title or h1 as file name
 	//send the content to client right away
-	int i=0;
+	//int i=0;
 	extern char webpage_root[];
-	char url[128];char name[128];char dir[80];
-	char msg[128];
+	char url[256];char name[128];char dir[80];
+	char msg[256];
 	char realpath[250];
 	int numchars=0;
 	char *match=NULL;
 	FILE *stream;
 	int filesize;
 	struct stat tmp;
-	bzero(url,128);bzero(name,128);
+	bzero(url,256);bzero(name,128);
 	bzero(dir,80);bzero(realpath,250);
-	sscanf(req,"/doslim?url=%[^&]&dir=%[^&]&name=%s",url,dir,name);//%*[^:]:%s
+	int i,j=0,url_len=strlen(req);
+	for(i=url_len-1;i>0;i--){
+		if(req[i]=='&') j++;
+		if(j==2) break;
+	}
+	sscanf(&req[i],"&dir=%[^&]&name=%s",dir,name);//%*[^:]:%s
+//	info(name);
+	for(j=12;j<i;j++)
+		url[j-12]=req[j];
+	//sscanf(req,"/doslim?url=%[^&]&dir=%[^&]&name=%s",url,dir,name);//%*[^:]:%s
 	chinese2host(dir);chinese2host(name);
 	/*
 	match=strstr(url,"&dir=");
@@ -55,14 +65,14 @@ void responseDoSlim(FILE *client,char *req){
 	*/
 //sprintf(msg,"[s]url=%s,dir=%s,name=%s[e]\n[s]webpage_root:%s[e]\n",url,dir,name,webpage_root);
 	//真它妈的晦气，前面设置msg的大小时设小了，结果导致溢出了,结果真是吓人，浪费了我两个小时
-	//info(msg);
+//	info(msg);
 	//if(strcmp(name,"default")==0),name will be modified in doSlimSave
 	sprintf(realpath,"%s/%s",webpage_root,dir);
 	doSlimSave(url,realpath,name);//save to file
 	bzero(realpath,250);
 //	info(webpage_root);
 	sprintf(realpath,"%s/%s/%s",webpage_root,dir,name);
-//info(realpath);
+info(realpath);
 	sendHeader(client,filesize);
 	if(stat(realpath,&tmp)==-1){//error,file not exist,for me,the file name maybe to long,exceed my limit:128
 		fprintf(client,"filename:%s\n",name);

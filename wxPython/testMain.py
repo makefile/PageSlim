@@ -54,14 +54,14 @@ class Frame(wx.Frame):
 		button2.SetForegroundColour("Red")
 		button3.SetBackgroundColour("gray")
 		button3.SetForegroundColour("Navy")
-		#button4 = wx.Button(panel, wx.ID_ANY, '取消', pos=(160, 260))
-		#self.Bind(wx.EVT_BUTTON, self.OnCancel, button4)
+		self.urlButton = wx.Button(panel, wx.ID_ANY, 'URL:',size=(50,36))
+		self.urlButton.SetForegroundColour('blue')
+		self.Bind(wx.EVT_BUTTON, self.OnClear, self.urlButton)
 		self.Bind(wx.EVT_CLOSE, self.OnQuit)#因该是点击x按钮关闭时调用
 
 		self.Bind(wx.EVT_ICONIZE, self.OnIconfiy) # What is the meaning?设置缩小到底部任务栏和恢复时做的动作，比如发出提示，声音等
 
-		urlLabel = wx.StaticText(panel, -1, "URL:")  
-		urlLabel.SetForegroundColour('blue')
+#urlLabel = wx.StaticText(panel, -1, "URL:")  
 		self.urlText = wx.TextCtrl(panel, -1, "http://www.linuxfan.com:1366/program/pageSlimer/linux-usage.html",size=(250, 38), style=wx.TE_MULTILINE)  #创建一个文本控件
 		titleLabel = wx.StaticText(panel, -1, "标题:") 
 		titleLabel.SetForegroundColour('blue') 
@@ -86,7 +86,7 @@ class Frame(wx.Frame):
 		hbox2 = wx.BoxSizer(wx.HORIZONTAL)
 		hbox3 = wx.BoxSizer(wx.HORIZONTAL)
 		hbox4 = wx.BoxSizer(wx.HORIZONTAL)
-		hbox1.Add(urlLabel,flag=wx.LEFT,border=8)
+		hbox1.Add(self.urlButton,flag=wx.LEFT)
 		hbox1.Add(self.urlText,proportion=1)
 		hbox1.Add(button1,flag=wx.LEFT,border=8)
 		vbox.Add(hbox1,flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP,border=10)
@@ -147,7 +147,8 @@ class Frame(wx.Frame):
 	def OnIconfiy(self, event):
 		wx.MessageBox('好好学习，天天向上!', '*送你一句良言*')
 		event.Skip()
-	
+	def OnClear(self,event):
+		self.urlText.Clear()
 	def OnHelp(self,event):
 		wx.MessageBox('1.复制粘帖网址到输入框，点击获取即可，内容会保存到云端\n2.您可以对获取到的内容进行编辑并重新保存至服务端\n3.您还可以导入导出文本文件', '*使用帮助*')
 

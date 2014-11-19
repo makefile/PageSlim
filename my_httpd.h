@@ -20,7 +20,7 @@
 #include<time.h>
 #include<fcntl.h>//O_RDONLY
 
-#define __DEBUG 1
+//#define __DEBUG 1
 #define MAXPATH 512
 #define MAXBUF 1024
 #define NOFILE 8
