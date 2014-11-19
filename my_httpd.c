@@ -13,19 +13,14 @@ int main(int argc,char **argv){
 	struct sockaddr_in addr;
 	int sock_fd;
 	unsigned int addrlen;
-//	init_daemon(argv[0],LOG_INFO);//运行守护进程
-	if(get_arg("home_dir")==0)//从配置文件读取参数
-		sprintf(home_dir,"%s","/tmp");
-	info(home_dir);
-	if(get_arg("upload_dir")==0) 
-		sprintf(upload_root,"%s","/var/www");
-	if(get_arg("webpage_dir")==0) 
-		sprintf(webpage_root,"%s","/var/www");
-	if(get_arg("ip")==0) get_addr("eth0");//本机ip
-	if(get_arg("port")==0) sprintf(port,"%s","80");//默认80
-	if(get_arg("back")==0) sprintf(back,"%s","5");
-	if(get_arg("username")==0) sprintf(username,"%s","admin");
-	if(get_arg("passwd")==0) sprintf(passwd,"%s","");
+//micro define determine whether to compile the code segment
+#if defined __DEBUG
+	init_daemon(argv[0],LOG_INFO);//运行守护进程
+#endif
+	if(getAllArg()==0){//return >0 if read sucess
+		info("PANIC:can't locate configuration file");
+		exit(-1);//从配置文件读取参数
+	}//get args:home_dir,webpage_root etc.
 	if((sock_fd=socket(PF_INET,SOCK_STREAM,0))<0){
 		info("socket()");//对syslog(LOG_INFO,"%s",msg)的包装
 		exit(-1);

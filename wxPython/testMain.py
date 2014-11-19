@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import wx
 import urllib2
+import urllib
 import time
 import re
 import httplib
@@ -10,17 +11,18 @@ import socket
 socket.setdefaulttimeout(10) #global
 reload(sys) 
 sys.setdefaultencoding('utf-8')
-#如果不设置编码，则unicode等问题较麻烦
+#如果不设置编码，则unicode等问题较麻烦,in windows,just use u'xxx'
 class Frame(wx.Frame):
 	def __init__(
 			self, parent=None, id=wx.ID_ANY, title='网文快存', pos=wx.DefaultPosition,
 			size=wx.DEFAULT, style=wx.DEFAULT_FRAME_STYLE):
-
+		
 		wx.Frame.__init__(self, parent, id, title, pos, size, style)
 		self.SetIcon(wx.Icon('eye.png', wx.BITMAP_TYPE_PNG))   #loadIcon.ico
 		menubar=wx.MenuBar()
 		file_menu=wx.Menu()  	  
 		help_menu=wx.Menu()  
+		set_menu=wx.Menu()  
 		file_menu.Append(101,'&Open','Open a new document')  
 		file_menu.Append(102,'&Save','Save the document')  
 		file_menu.AppendSeparator()  
@@ -28,13 +30,16 @@ class Frame(wx.Frame):
 		#quit.SetBitmap(wx.Image('stock_exit-16.png', wx.BITMAP_TYPE_PNG).ConvertToBitmap())  
 		file_menu.AppendItem(quit)  
 		help_menu.Append(103,'&Help','Seek help')
+		set_menu.Append(104,'&设置','set profiles')
 		menubar.Append(file_menu,'&File')  	  
 		menubar.Append(help_menu,'&Help')  
+		menubar.Append(set_menu,'&Setting')  
 		self.SetMenuBar( menubar )
 		wx.EVT_MENU(self, 105, self.OnQuit) 
 		wx.EVT_MENU(self, 101, self.OnOpenFile) 
 		wx.EVT_MENU(self, 102, self.OnSaveAs) 
 		wx.EVT_MENU(self, 103, self.OnHelp) 
+		wx.EVT_MENU(self, 104, self.OnSet) 
 		panel = wx.Panel(self, wx.ID_ANY)
 
 		button1 = wx.Button(panel, wx.ID_ANY, '快取')
@@ -63,8 +68,11 @@ class Frame(wx.Frame):
 		self.titleText = wx.TextCtrl(panel, -1, "",size=(200, 30))
 		self.titleText.SetInsertionPoint(0)
 		self.urlText.SetInsertionPoint(0)#设置插入点
+		catalogLabel = wx.StaticText(panel, -1, "归档目录:") 
+		catalogLabel.SetForegroundColour('blue') 
+		self.catalogText = wx.TextCtrl(panel, -1, "default",size=(200, 30))
 		richTextLabel = wx.StaticText(panel, -1, "正文(可编辑):")
-		self.richText = wx.TextCtrl(panel, -1, "编辑文本",style=wx.TE_MULTILINE|wx.TE_RICH2) #创建丰富文本控件
+		self.richText = wx.TextCtrl(panel, -1, "\n\n\n\n\t\t\t\t\t\t\t\t\t^_^",style=wx.TE_MULTILINE|wx.TE_RICH2) #创建丰富文本控件
 		self.richText.SetInsertionPoint(0)  
 		self.richText.SetForegroundColour('blue')
 		#self.richText.SetDefaultStyle(wx.TextAttr("blue")) #设置文本样式,从1到4的字符，前景色，背景色
@@ -84,7 +92,9 @@ class Frame(wx.Frame):
 		vbox.Add(hbox1,flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP,border=10)
 		vbox.Add((-1, 10))
 		hbox2.Add(titleLabel,flag=wx.LEFT,border=8)
-		hbox2.Add(self.titleText,proportion=1)
+		hbox2.Add(self.titleText,proportion=2)
+		hbox2.Add(catalogLabel,flag=wx.ALIGN_LEFT,border=8)
+		hbox2.Add(self.catalogText,proportion=1)
 		vbox.Add(hbox2,flag=wx.EXPAND|wx.LEFT|wx.RIGHT,border=10)
 		vbox.Add((-1, 10))   #25px space    
 		vbox.Add(richTextLabel,flag=wx.LEFT|wx.ALIGN_LEFT,border=18)
@@ -114,17 +124,15 @@ class Frame(wx.Frame):
 			wx.MessageBox('您还没输入网址','^0^')
 			return
 		try:
-			src=urllib2.urlopen('http://'+self.host+'/doslim?url='+url+'&dir=default&name=default')
-			ttext=src.read()
-			text=''
-			while(ttext!=''):
-				text=text+ttext
-				ttext=src.read()
+			src=urllib.urlopen('http://'+self.host+'/doslim?url='+url+'&dir=default&name=default')
+#so strange that the urllib2.urlopen not work properly at times,is it beacause the server i write has problem of sending packet headers?
+			text=src.read()
 			src.close()
-			#print 'text:',text
+			print 'text:',text[0:40]
 			#		flist=re.findall(r'^filename:(.*?)\n',text)
 			nm=re.search(r'(?<=filename:).+?(?=$)',text,re.M)
-			self.filename=nm.group(0)
+			if nm!=None:
+				self.filename=nm.group(0)
 			#		print 'filename(0):%s<<<'%self.filename[0]
 			self.filename=self.filename.strip()
 			print 'read size:',len(text)
@@ -145,6 +153,7 @@ class Frame(wx.Frame):
 
 	def OnQuit(self, event):
 		self.Destroy() #or close()
+	
 	def OnSave2server(self, event):
 		text=self.richText.GetValue()
 		boundary='---------%s'%hex(int(time.time()*1000))
@@ -183,13 +192,21 @@ class Frame(wx.Frame):
 	def OnCancel(self,event):
 		pass    
 	def readConfigure(self):
-		fh=open('server.conf')
-		data=fh.readline()
-		while(data[:4] != 'addr'):
-			data=fh.readline()
-
-		self.host=data[5:].strip()	#ip or domain,include port
-		fh.close()
+		try:
+			fh=open('server.conf')
+			size=len(fh.read())
+			fh.seek(0)
+			
+			while(fh.tell()!=size):
+				data=fh.readline()
+				if(data[:4] == 'addr'): 
+					self.host=data[5:].strip()#ip or domain,include port
+				elif(data[:7]=='catalog'):
+					self.catalogText.SetValue(data[8:].strip())
+			
+			fh.close()
+		except:
+			self.host='configuration not found!'
 	def ReadFile(self,filepath):  
 		if filepath:  
 		    try:  
@@ -224,12 +241,102 @@ class Frame(wx.Frame):
 			self.SaveFile(filename) 
 		#self.SetTitle(self.title + '--' + self.savefilename)  
 		dlg.Destroy()
+		
+	def OnSet(self,event):
+		set_win = Setting(size=(476, 280))  #640,480 #1.618:1
+		set_win.Centre()
+		set_win.Show()
+class Setting(wx.Frame):
+	def __init__(
+			self, parent=None, id=wx.ID_ANY, title='设置', pos=wx.DefaultPosition,
+			size=wx.DEFAULT, style=wx.DEFAULT_FRAME_STYLE):
+		wx.Frame.__init__(self, parent, id, title, pos, size, style)
+		panel = wx.Panel(self, wx.ID_ANY)
+		ipLabel = wx.StaticText(panel, -1, "服务器:")  
+		ipLabel.SetForegroundColour('blue')
+		self.ipText = wx.TextCtrl(panel, -1, "192.168.1.5",size=(250, 38))  #文本控件
+		portLabel = wx.StaticText(panel, -1, "端口 号:") 
+		portLabel.SetForegroundColour('blue') 
+		self.portText = wx.TextCtrl(panel, -1, "1366",size=(200, 30))
+		self.portText.SetInsertionPoint(0)
+		self.ipText.SetInsertionPoint(0)#设置插入点
+		catalogLabel = wx.StaticText(panel, -1, "归档目录:") 
+		catalogLabel.SetForegroundColour('blue') 
+		self.catalogText = wx.TextCtrl(panel, -1, "default",size=(200, 30))
+		
+		button1 = wx.Button(panel, wx.ID_ANY, '保存')
+		button2 = wx.Button(panel, wx.ID_ANY, '取消')
+		button1.SetBackgroundColour("gray")
+		button1.SetForegroundColour("Navy")
+		self.Bind(wx.EVT_BUTTON, self.OnSaveConf, button1)
+		self.Bind(wx.EVT_BUTTON, self.OnCancel, button2)
+		vbox = wx.BoxSizer(wx.VERTICAL)
+		hbox1 = wx.BoxSizer(wx.HORIZONTAL)
+		hbox2 = wx.BoxSizer(wx.HORIZONTAL)
+		hbox3 = wx.BoxSizer(wx.HORIZONTAL)
+		hbox4 = wx.BoxSizer(wx.HORIZONTAL)
+		
+		hbox1.Add(ipLabel,flag=wx.LEFT,border=8)
+		hbox1.Add(self.ipText,proportion=1)
+		vbox.Add(hbox1,flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP,border=10)
+		vbox.Add((-1, 10))
+		hbox2.Add(portLabel,flag=wx.LEFT,border=8)
+		hbox2.Add(self.portText,proportion=1)		
+		vbox.Add(hbox2,flag=wx.EXPAND|wx.LEFT|wx.RIGHT,border=10)
+		vbox.Add((-1, 10))
+		hbox3.Add(catalogLabel,flag=wx.LEFT,border=8)
+		hbox3.Add(self.catalogText,proportion=1)		
+		vbox.Add(hbox3,flag=wx.EXPAND|wx.LEFT|wx.RIGHT,border=10)
+		vbox.Add((-1, 50))
+		hbox4.Add(button1,flag=wx.LEFT,border=18)
+		hbox4.Add(button2,flag=wx.ALIGN_LEFT|wx.LEFT,border=8)
+		vbox.Add(hbox4,flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.Bottom,border=10)
+		panel.SetSizer(vbox)
+		self.loadConf() #加载配置文件，显示在界面
+	def loadConf(self):
+		fh=open('server.conf')
+		size=len(fh.read())
+		fh.seek(0)
+		while(fh.tell()!=size):
+			data=fh.readline()
+			if(data[:4] == 'addr'): 
+				host=data[5:].strip()#ip or domain,include port
+			elif(data[:7]=='catalog'):
+				self.catalogText.SetValue(data[8:].strip())
+						
+		fh.close()
+		splits=host.split(':')
+		host=splits[0]
+		port=splits[1]
+		self.ipText.SetValue(host)
+		self.portText.SetValue(port)
+	def OnSaveConf(self,event):		
+		host=self.ipText.GetValue()
+		port=self.portText.GetValue()
+		catalog=self.catalogText.GetValue()
+		fh=open('server.conf','w')
+		fh.write('#pageSlimer server configuration\n#addr=(ip/domain):(port)\n')
+		fh.write('addr=%s:%s'%(host,port))#will not write \n to the end
+		fh.write('\ncatalog=%s'%catalog)
+		fh.close()
+		self.Destroy()
+	def OnCancel(self,event):
+		self.Destroy()
+		#self.Hide()
+		#pass
+		
 def TestFrame():
 	app = wx.PySimpleApp()
 	frame = Frame(size=(776, 480))  #640,480 #1.618:1
+
 	frame.Centre()
 	frame.Show() #可以让它设置是否在程序启动时一起显示出来
 	#frame.OnHide(wx.Frame)  #让它启动时隐藏
 	app.MainLoop()
 if __name__ == '__main__':
-	TestFrame()
+#src=urllib2.urlopen('http://127.0.0.1:1366/doslim?url=http://www.linuxfan.com:1366/program/pageSlimer/linux-usage.html&dir=default&name=default')
+#		text=src.read()
+#		src.close()
+#		print 'text:',text[0:40]
+
+		TestFrame()

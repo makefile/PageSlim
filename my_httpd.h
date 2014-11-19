@@ -20,17 +20,20 @@
 #include<time.h>
 #include<fcntl.h>//O_RDONLY
 
+#define __DEBUG 1
 #define MAXPATH 512
 #define MAXBUF 1024
 #define NOFILE 8
 #define MAX_FILE_SIZE 4096000//less than 4MB,4096*1024
 char buffer[1025];
 extern void init_daemon(const char *program,int facility);
-extern int get_arg(char *cmd);
+extern int get_arg(char *cmd,char *buf,char *glb_var);
+extern int getArgAll();
 extern void info(char *msg);
 extern void handleTCPClient(int sock);
 extern void GiveResponse(FILE *client_sock,char *path);
 extern void responseDoSlim(FILE *client_sock,char *request);
+extern void echoHtmlPage(FILE *client_sock,char *path);
 extern void handlePost(int sock,char *req,int len);
 extern char file_type(mode_t st_mode);
 extern char* dir_up(char *dirpath);

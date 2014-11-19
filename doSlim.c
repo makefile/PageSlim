@@ -4,14 +4,15 @@ int doSlimSave(char *url,char *dir,char *name){
 	//dir,name can be default,return filename
 	char command[200];
 	int status;
-	sprintf(command,"python doSlim.py %s %s %s",
-			url,dir,name);
+	char workdir[]="/etc/pageSlim/";//but if i was run as daemon,maybe changed to work in /var/log for create sys logs
+	sprintf(command,"python %sdoSlim.py %s %s %s",
+			workdir,url,dir,name);
 	//info(command);
 	status=system(command);//system is different from exc series fun,for system will block the parent process
 	//doSlim.py add the webpage name to a table,simplily just append to a file:newest
 	if(strcmp(name,"default")==0){
 		FILE *fp;
-		fp=fopen("newest","r");
+		fp=fopen("/tmp/newest","r");
 		fgets(name,127,fp);
 		fclose(fp);
 	}

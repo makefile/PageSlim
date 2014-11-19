@@ -7,6 +7,7 @@ void listHomeFiles(FILE *client_sock,char *path);
 void showSlimList(FILE *client,char *req);
 void echoSlimPage(FILE *client,char *req);
 void login_auth(FILE *client,char *req);
+void delete_page(FILE *client,char *req);
 //void signup(FILE *client,char *req);
 /*
    以html响应客户端的请求，若请求是目录，则列出目录信息，若是文件，则将文件内容传送给客户端
@@ -27,6 +28,10 @@ void GiveResponse(FILE *client,char *req){
 		login_auth(client,req);//?un=xx&pw=xx (md5)
 //	else if(strncasecmp(req,"/signup",7)==0)
 //		signup(client,req);//registe
+	else if(strncasecmp(req,"/delete",7)==0)
+		delete_page(client,req);//?abs=xx&un=xx&pw=xx
+	else if(strncasecmp(req,"/view?resp=html",15)==0)
+	;//	echoHtmlPage(client,req);
 	else listHomeFiles(client,req);
 }
 /*将webpage_root下的所有文件夹下的文件名列成树形JSON列表
@@ -336,11 +341,30 @@ void login_auth(FILE *client,char *req){
 	sscanf(req,"/login?un=%[^&]&pw=%s",user,pw);
 	chinese2host(user);
 	sendHead(client);//200 OK
-	info("conf:username:");info(username);
-	info(passwd);
+//	info("conf:username:");info(username);
+//	info(passwd);
 	if(strcmp(user,username)==0
 			&&strncasecmp(pw,passwd,strlen(passwd))==0)
 		fputs("login_ok",client);
 	else fputs("login_deny",client);
 	fflush(client);
 }
+void delete_page(FILE *client,char *req){
+	//delete the saved html slimed page,for security check the username and passwd and modified to /delete/(abs)/php_(un)_(pw).jsp this requests that the un and pw should not includeunderline and dot
+	char user[30],pw[30],abspath[256];
+	extern char username[],passwd[];
+	sscanf(req,"/delete/%[^/]/php_%[^_]_%[^.].jsp",abspath,user,pw);
+	chinese2host(abspath);
+	chinese2host(user);
+	sendHead(client);//200 OK
+//	info(passwd);
+	if(strcmp(user,username)==0
+			&&strncasecmp(pw,passwd,strlen(passwd))==0){
+		if(delete_file(abspath)==0)
+			fputs("delete_ok",client);
+		else fputs("delete_error",client);//file not exists or write protected
+	}
+	else fputs("login_deny",client);
+	fflush(client);
+}
+

@@ -27,8 +27,11 @@ void init_daemon(const char *pname,int facility){
 	return ;
 }
 void info(char *msg){
-	//syslog(LOG_INFO,"%s",msg);
+#if defined __DEBUG
+	syslog(LOG_INFO,"%s",msg);
+#else
 	fprintf(stderr,"%s\n",msg);
+#endif
 }
 void sendHead(FILE *sock){
 	//fprintf(sock,"HTTP/1.1 200 OK\r\nServer:Honey\r\nConnection:close\r\n\r\n");//两个\r\n,头部结束，HTTP1.0默认close,1.1默认keep-alive
@@ -42,72 +45,97 @@ void sendHead_sock(int sock){
 	send(sock,"Server: Honey\r\n",15,0);
 	send(sock,"Connection:close\r\n",17,0);
 }
-/*读取配置文件/etc/my_httpd.conf,进行字符串匹配*/
-int get_arg(char *cmd){
-	FILE *fp;
+/*读取配置文件/etc/ my_httpd.conf,进行字符串匹配*/
+int get_arg(char *cmd,char *buf,char *glb_var){
+/*	FILE *fp;
 	char buf[1024];
-	size_t bytes_read;
-	char * match=NULL;
-	extern char ip[],home_dir[],upload_root[],webpage_root[],port[],back[],username[],passwd[];
-	fp=fopen("/home/fyk/my_httpd/my_httpd.conf","r");//etc/my_httpd.conf
+	fp=fopen("/etc/pageSlim/my_httpd.conf","r");
 	bytes_read=fread(buf,1,sizeof(buf),fp);//file size
 	fclose(fp);
 	if(bytes_read==0||bytes_read==sizeof(buffer)) 
 		return 0;//没读到或文件太大
 	buf[bytes_read]='\0';
+*/	size_t bytes_read;
+	char * match=NULL;
+//	extern char ip[],home_dir[],upload_root[],webpage_root[],port[],back[],username[],passwd[];
 	if(!strncmp(cmd,"home_dir",8)){
 		match=strstr(buf,"home_dir=");
 		if(match==NULL) return 0;
-		bytes_read=sscanf(match,"home_dir=%s",home_dir);
+		bytes_read=sscanf(match,"home_dir=%s",glb_var);
 		//bytes_read is 1
-		bytes_read=strlen(home_dir);
-		if(home_dir[bytes_read-1]=='/')
-			home_dir[bytes_read-1]='\0';
+		bytes_read=strlen(glb_var);
+		if(glb_var[bytes_read-1]=='/')
+			glb_var[bytes_read-1]='\0';
 		return bytes_read;
 	}else if(!strncmp(cmd,"upload_dir",10)){
 		match=strstr(buf,"upload_dir=");
 		if(match==NULL) return 0;
-		bytes_read=sscanf(match,"upload_dir=%s",upload_root);
-		bytes_read=strlen(upload_root);
-		if(upload_root[bytes_read-1]=='/')
-			upload_root[bytes_read-1]='\0';
+		bytes_read=sscanf(match,"upload_dir=%s",glb_var);
+		bytes_read=strlen(glb_var);
+		if(glb_var[bytes_read-1]=='/')
+			glb_var[bytes_read-1]='\0';
 		return bytes_read;
 	}else if(!strncmp(cmd,"webpage_dir",11)){
 		match=strstr(buf,"webpage_dir=");
 		if(match==NULL) return 0;
-		bytes_read=sscanf(match,"webpage_dir=%s",webpage_root);
-		bytes_read=strlen(webpage_root);
-		if(webpage_root[bytes_read-1]=='/')
-			webpage_root[bytes_read-1]='\0';
+		bytes_read=sscanf(match,"webpage_dir=%s",glb_var);
+		bytes_read=strlen(glb_var);
+		if(glb_var[bytes_read-1]=='/')
+			glb_var[bytes_read-1]='\0';
 		return bytes_read;
 	}else if(!strncmp(cmd,"port",4)){
 		match=strstr(buf,"port=");
 		if(match==NULL) return 0;
-		bytes_read=sscanf(match,"port=%s",port);
+		bytes_read=sscanf(match,"port=%s",glb_var);
 		return bytes_read;
 	}else if(!strncmp(cmd,"ip",4)){
 		match=strstr(buf,"ip=");
 		if(match==NULL) return 0;
-		bytes_read=sscanf(match,"ip=%s",ip);
+		bytes_read=sscanf(match,"ip=%s",glb_var);
 		return bytes_read;
 	}else if(!strncmp(cmd,"back",4)){
 		match=strstr(buf,"back=");
 		if(match==NULL) return 0;
-		bytes_read=sscanf(match,"back=%s",back);
+		bytes_read=sscanf(match,"back=%s",glb_var);
 		return bytes_read;
 	}else if(!strncmp(cmd,"username",8)){
 		match=strstr(buf,"username=");
 		if(match==NULL) return 0;
-		bytes_read=sscanf(match,"username=%s",username);
+		bytes_read=sscanf(match,"username=%s",glb_var);
 		return bytes_read;
 	}else if(!strncmp(cmd,"passwd",6)){
 		match=strstr(buf,"passwd=");
 		if(match==NULL) return 0;
-		bytes_read=sscanf(match,"passwd=%s",passwd);
+		bytes_read=sscanf(match,"passwd=%s",glb_var);
 		return bytes_read;
 	}else return 0;
 }
-
+int getAllArg(){//上面的get_arg写的罗嗦了一些，但为了方便以后提取单个属性
+	FILE *fp;
+	char buf[1024];
+	size_t bytes_read;
+	char * match=NULL;
+	extern char ip[],home_dir[],upload_root[],webpage_root[],port[],back[],username[],passwd[];
+	fp=fopen("/etc/pageSlim/my_httpd.conf","r");
+	bytes_read=fread(buf,1,sizeof(buf),fp);//file size
+	fclose(fp);
+	if(bytes_read==0||bytes_read==sizeof(buffer)) 
+		return 0;//没读到或文件太大
+	buf[bytes_read]='\0';
+	if(get_arg("home_dir",buf,home_dir)==0)//从配置文件读取参数
+		sprintf(home_dir,"%s","/tmp");
+//	info(home_dir);
+	if(get_arg("upload_dir",buf,upload_root)==0) 
+		sprintf(upload_root,"%s","/var/www");
+	if(get_arg("webpage_dir",buf,webpage_root)==0) 
+		sprintf(webpage_root,"%s","/var/www");
+	if(get_arg("ip",buf,ip)==0) get_addr("eth0");//本机ip
+	if(get_arg("port",buf,port)==0) sprintf(port,"%s","80");//默认80
+	if(get_arg("back",buf,back)==0) sprintf(back,"%s","5");
+	if(get_arg("username",buf,username)==0) sprintf(username,"%s","admin");
+	if(get_arg("passwd",buf,passwd)==0) sprintf(passwd,"%s","");
+	return 1;
+}
 char *chinese2host(char *path){
 	int fd,len,ret,i=0,sum=0;
 	char chinese[256];

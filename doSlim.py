@@ -94,7 +94,7 @@ def sum_max (values):
 			break
 	return left,right+1
 
-def method_1 (content, k=1):
+def slim_method_1 (content, k=1):
 	if not content:
 		return None,None,None,None
 	tmp = content.split('\n')
@@ -111,8 +111,9 @@ def method_1 (content, k=1):
 
 def extract (content):
 	content = remove_empty_line(remove_js_css(content))
-	left,right,x,y = method_1 (content)
-	return '\n'.join(content.split('\n')[left:right])
+	left,right,x,y = slim_method_1 (content)
+#return '\n'.join(content.split('\n')[left:right])
+	return ''.join(content.split('\n')[left:right])
 
 #代码 从最后一个函数开始调用。
 
@@ -255,9 +256,9 @@ def getContent(url):#待解决：gzip解压及网页编码识别，第一次找�
 def getCharset(page):
 	pattern=re.compile(r'charset',re.S)
 	charsets=pattern.findall(page)
-	if len(charsets)>0:
-		return charset[0]
-	else return 'default'
+#if len(charsets)>0:
+#		return charset[0]
+#	else return 'default'
 	
 if __name__=='__main__':
 	#url='http://www.jb51.net/article/50941.htm'
