@@ -20,7 +20,9 @@ void GiveResponse(FILE *client,char *req){
 	}else if(strncasecmp(req,"/showlist",9)==0){
 		info("will showlist...");
 		showSlimList(client,req);
-	}else if(strncasecmp(req,"/view",5)==0)
+	}else if(strncasecmp(req,"/view?resp=html",15)==0)
+		echoHtmlPage(client,req);
+	else if(strncasecmp(req,"/view",5)==0)
 		echoSlimPage(client,req);
 	//目前由于存储区域未进行按用户划分，因此验证登录多用户无现实意义
 	//可以针对管理员设置密码，验证身份
@@ -30,8 +32,7 @@ void GiveResponse(FILE *client,char *req){
 //		signup(client,req);//registe
 	else if(strncasecmp(req,"/delete",7)==0)
 		delete_page(client,req);//?abs=xx&un=xx&pw=xx
-	else if(strncasecmp(req,"/view?resp=html",15)==0)
-	;//	echoHtmlPage(client,req);
+//	else if(strstr(webpage_root,req)!=NULL)
 	else listHomeFiles(client,req);
 }
 /*将webpage_root下的所有文件夹下的文件名列成树形JSON列表
@@ -41,7 +42,7 @@ void makeJson(char *abspath,cJSON *parent){//in curse,absolute path
 	struct dirent *dirent;//dirent may statically a
 	struct stat fileinfo;
 	DIR *dir;
-	char subdir[128];
+	char subdir[MAX_DIR];
 	cJSON *sub ;
 	stat(abspath,&fileinfo);
 	if(S_ISREG(fileinfo.st_mode)){//st_mtime
@@ -65,7 +66,6 @@ void makeJson(char *abspath,cJSON *parent){//in curse,absolute path
    */
 void showSlimList(FILE *client,char *req){
 	extern char webpage_root[];
-	int len;char *realpath;
 	sendHead(client);
 	cJSON *root;
 	root = cJSON_CreateObject();
@@ -123,14 +123,14 @@ void listHomeFiles(FILE *client_sock,char *path){
 	struct stat fileinfo;
 	char Filename[MAXPATH];
 	DIR *dir;
-	int fd,len,ret,i=0;
+	int fd,len,ret;
 	//FILE *fp;
 	char *p,*realpath,*realFilename,*nport;
 	struct passwd *p_passwd;
 	struct group *p_group;
-	char chinese[128];
-	extern char home_dir[],ip[],port[];
-	extern char packHead_close[];
+//	char chinese[MAXPATH];
+	extern char home_dir[],ip[],port[],webpage_root[];
+	//extern char packHead_close[];
 	//目前未容许选择可上传到的路径，统一放在/upload目录下
 	char uploadHtml[]="<form method=\"POST\" action=\"/upload\" enctype=\"multipart/form-data\">上传文件"
 		"<input name=\"image\" type=\"file\" />"
@@ -142,7 +142,7 @@ void listHomeFiles(FILE *client_sock,char *path){
 	len=strlen(home_dir)+strlen(path)+1;
 	realpath=malloc(len+1);
 	bzero(realpath,len+1);
-	sprintf(realpath,"%s/%s",home_dir,path);
+	sprintf(realpath,"%s%s",home_dir,path);
 	//get port
 	len=strlen(port)+1;
 	nport=malloc(len+1);
@@ -160,15 +160,19 @@ void listHomeFiles(FILE *client_sock,char *path){
 		len=lseek(fd,0,SEEK_END);
 		p=(char *)malloc(len+2048);//plus 2048 is due to i when display the text,need extra space:'<' changes to &#60;
 		bzero(p,len+2048);
+//		info(realpath);info(webpage_root);
+		if(strncmp(realpath,webpage_root,strlen(webpage_root))==0){
+			sprintf(p,"/view?resp=html&dir=%s",realpath);
+			echoHtmlPage(client_sock,p);
+			free(p);
+			close(fd);
+			goto out;
+		}
 		lseek(fd,0,SEEK_SET);
 		ret=read(fd,p,len);//一次性读取文件，对于大文件会出错，有时间再改，分批读取和传送文件
-		char logmsg[30];
+//		char logmsg[MAX_MSG];
 		if(ret<0) info("read fail");
-		/*else {
-			sprintf(logmsg,"read len=%d,the real len is %d\n",ret,len);
-			info(logmsg);
-		}*/
-		close(fd);
+		close(fd);		
 		char *type=postfix(path);
 		if(strcmp("c",type)==0||strcmp("java",type)==0
 			||strcmp("py",type)==0||strcmp("txt",type)==0){
@@ -336,7 +340,7 @@ char *postfix(char *file){
 }
 //strrchr(.)获得.后边的扩展名
 void login_auth(FILE *client,char *req){
-	char user[30],pw[30];
+	char user[MAX_UN],pw[MAX_UN];
 	extern char username[],passwd[];
 	sscanf(req,"/login?un=%[^&]&pw=%s",user,pw);
 	chinese2host(user);
@@ -351,7 +355,7 @@ void login_auth(FILE *client,char *req){
 }
 void delete_page(FILE *client,char *req){
 	//delete the saved html slimed page,for security check the username and passwd and modified to /delete/(abs)/php_(un)_(pw).jsp this requests that the un and pw should not includeunderline and dot
-	char user[30],pw[30],abspath[256];
+	char user[MAX_UN],pw[MAX_UN],abspath[MAXPATH];
 	extern char username[],passwd[];
 	sscanf(req,"/delete/%[^/]/php_%[^_]_%[^.].jsp",abspath,user,pw);
 	chinese2host(abspath);

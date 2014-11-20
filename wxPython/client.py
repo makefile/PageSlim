@@ -1,3 +1,4 @@
+#!/usr/bin/python
 # -*- coding: utf-8 -*-
 import wx
 import urllib2
@@ -120,15 +121,17 @@ class Frame(wx.Frame):
 		self.Hide()
 	def OnGet(self, event):
 		url=self.urlText.GetValue().strip()
+		catalog=self.catalogText.GetValue().strip()
+#the dir and name indicate where to save in the server
 		if(url==''):
 			wx.MessageBox('您还没输入网址','^0^')
 			return
 		try:
-			src=urllib.urlopen('http://'+self.host+'/doslim?url='+url+'&dir=default&name=default')
+			src=urllib.urlopen('http://'+self.host+'/doslim?url='+url+'&dir='+catalog+'&name=default')
 #so strange that the urllib2.urlopen not work properly at times,is it beacause the server i write has problem of sending packet headers?
 			text=src.read()
 			src.close()
-			print 'text:',text[0:40]
+#print 'text:',text[0:40]
 			#		flist=re.findall(r'^filename:(.*?)\n',text)
 			nm=re.search(r'(?<=filename:).+?(?=$)',text,re.M)
 			if nm!=None:
@@ -157,11 +160,14 @@ class Frame(wx.Frame):
 	
 	def OnSave2server(self, event):
 		text=self.richText.GetValue()
+		catalog=self.catalogText.GetValue().strip()
+		if text==None or catalog==None:
+			return
 		boundary='---------%s'%hex(int(time.time()*1000))
 		data=[] #a list
 #	data.append('\r\n')
 		data.append('--%s'%boundary)
-		data.append('dir=default')#= not : in my server
+		data.append('dir=%s'%catalog)#= not : in my server
 #	print 'append data name:',self.filename
 		data.append('filename=%s'%self.filename)
 		data.append('\n')#因为是自己写的服务端，所以构造的这些数据比较随意了，按服务端的要求来写

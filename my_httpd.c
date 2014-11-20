@@ -1,10 +1,10 @@
 #include"my_httpd.h"
 char ip[128],port[8];//全是字符串
-char back[8],home_dir[128];//listen队列大小，浏览主目录
-char upload_root[128];
-char webpage_root[128];
-char username[30];
-char passwd[30];
+char back[8],home_dir[MAX_DIR];//listen队列大小，浏览主目录
+char upload_root[MAX_DIR];
+char webpage_root[MAX_DIR];
+char username[MAX_UN];
+char passwd[MAX_UN];
 struct ThreadArgs{
 	int clntSock;
 };
@@ -37,7 +37,7 @@ int main(int argc,char **argv){
 	if(listen(sock_fd,atoi(back))<0){
 		info("listen");exit(-1);
 	}
-	int len,new_fd;
+	int new_fd;
 	while(1){
 		//addrlen=sizeof(struct sockaddr_in);
 		new_fd=accept(sock_fd,(struct sockaddr*)&addr,&addrlen);
@@ -75,5 +75,5 @@ void *ThreadMain(void *threadArgs){
 	int clntSock=((struct ThreadArgs*)threadArgs)->clntSock;
 	free(threadArgs);//deallocate memory
 	handleTCPClient(clntSock);
-	return;
+	return (void *)NULL;
 }

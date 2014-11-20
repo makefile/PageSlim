@@ -2,9 +2,9 @@
 int doSlimSave(char *url,char *dir,char *name){
 	//call doSlim.py,save to /dir/filename,
 	//dir,name can be default,return filename
-	char command[200];
 	int status;
 	char workdir[]="/etc/pageSlim/";//but if i was run as daemon,maybe changed to work in /var/log for create sys logs
+	char command[MAX_URL+MAX_DIR+MAX_FN];//SO BIG
 	sprintf(command,"python %sdoSlim.py '%s' %s %s",
 			workdir,url,dir,name);
 //use single ' is for that linux shell won't take it as a back job if the url include symbol '&'
@@ -14,7 +14,7 @@ int doSlimSave(char *url,char *dir,char *name){
 	if(strcmp(name,"default")==0){
 		FILE *fp;
 		fp=fopen("/tmp/newest","r");
-		fgets(name,127,fp);
+		fgets(name,MAX_FN,fp);
 		fclose(fp);
 	}
 	//if(!WIFEXITED(status))
@@ -36,16 +36,16 @@ void responseDoSlim(FILE *client,char *req){
 	//send the content to client right away
 	//int i=0;
 	extern char webpage_root[];
-	char url[256];char name[128];char dir[80];
-	char msg[256];
-	char realpath[250];
+	char url[MAX_URL];char name[MAX_FN];char dir[MAX_DIR];
+	char msg[MAX_MSG];
+	char realpath[MAX_URL];
 	int numchars=0;
 	char *match=NULL;
 	FILE *stream;
 	int filesize;
 	struct stat tmp;
-	bzero(url,256);bzero(name,128);
-	bzero(dir,80);bzero(realpath,250);
+	bzero(url,MAX_URL);bzero(name,MAX_FN);
+	bzero(dir,MAX_DIR);bzero(realpath,MAX_URL);
 	int i,j=0,url_len=strlen(req);
 	for(i=url_len-1;i>0;i--){
 		if(req[i]=='&') j++;
@@ -64,21 +64,21 @@ void responseDoSlim(FILE *client,char *req){
 	sscanf(match,"&name=%s",name);
 	*/
 //sprintf(msg,"[s]url=%s,dir=%s,name=%s[e]\n[s]webpage_root:%s[e]\n",url,dir,name,webpage_root);
-	//真它妈的晦气，前面设置msg的大小时设小了，结果导致溢出了,结果真是吓人，浪费了我两个小时
+	//前面设置msg的大小时设小了，结果导致溢出了,结果真是吓人，浪费了我两个小时
 //	info(msg);
 	//if(strcmp(name,"default")==0),name will be modified in doSlimSave
 	sprintf(realpath,"%s/%s",webpage_root,dir);
 	doSlimSave(url,realpath,name);//save to file
-	bzero(realpath,250);
+	bzero(realpath,MAX_URL);
 //	info(webpage_root);
 	sprintf(realpath,"%s/%s/%s",webpage_root,dir,name);
-info(realpath);
-	sendHeader(client,filesize);
+//info(realpath);
 	if(stat(realpath,&tmp)==-1){//error,file not exist,for me,the file name maybe to long,exceed my limit:128
 		fprintf(client,"filename:%s\n",name);
 		fprintf(client,"**ERROR:filename is too long!\n");
 	}else{
 	filesize=tmp.st_size;//or use fseek and ftell
+	sendHeader(client,filesize);
 	stream=fopen(realpath,"rb");
 	sprintf(msg,"in doSlim:start send file size:%d\n",filesize);
 	info(msg);

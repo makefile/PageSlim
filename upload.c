@@ -5,12 +5,12 @@ void uploadFile(int sock_fd,char *path,int contLen){
 	//	struct dirent *dirent;
 	//	struct stat fileinfo;
 	char filename[MAXPATH];
-	//	info(filename);
 	//	DIR *dir;
-	int binBuf[4096],isBin=1;//contBuf[MAX_FILE_SIZE] is too large and segment err
-	int fd,len,ret,i=0,sum=0;
+	int isBin=1;
+//	int binBuf[4096],isBin=1;//contBuf[MAX_FILE_SIZE] is too large and segment err
+	int len,i=0,sum=0;
 	char *realpath,*index;
-	char logmsg[64],boundary[64];
+	char logmsg[MAX_MSG],boundary[64];
 	extern char upload_root[];
 	//	sprintf(logmsg,"contLen:%d\n",contLen);
 	//	info(logmsg);

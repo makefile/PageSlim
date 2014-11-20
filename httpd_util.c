@@ -119,7 +119,7 @@ int getAllArg(){//上面的get_arg写的罗嗦了一些，但为了方便以后�
 	fp=fopen("/etc/pageSlim/my_httpd.conf","r");
 	bytes_read=fread(buf,1,sizeof(buf),fp);//file size
 	fclose(fp);
-	if(bytes_read==0||bytes_read==sizeof(buffer)) 
+	if(bytes_read==0||bytes_read==sizeof(buf)) 
 		return 0;//没读到或文件太大
 	buf[bytes_read]='\0';
 	if(get_arg("home_dir",buf,home_dir)==0)//从配置文件读取参数
@@ -138,7 +138,7 @@ int getAllArg(){//上面的get_arg写的罗嗦了一些，但为了方便以后�
 }
 char *chinese2host(char *path){
 	int fd,len,ret,i=0,sum=0;
-	char chinese[256];
+	char chinese[MAXPATH];
 	for(ret=0,len=strlen(path);ret<len;ret++){
 		if(path[ret]=='%') {
 			path[ret+2]=hexstr2int(path[ret+1],

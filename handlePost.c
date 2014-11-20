@@ -1,10 +1,10 @@
 #include "my_httpd.h"
 
 void modify(int sock_fd,int len){
-	char filename[128];char dir[128];
-	char realpath[256];char boundary[128];
-	bzero(filename,128);bzero(dir,128);
-	bzero(realpath,256);bzero(boundary,128);
+	char filename[MAX_FN];char dir[MAX_DIR];
+	char realpath[MAX_URL];char boundary[128];
+	bzero(filename,MAX_FN);bzero(dir,MAX_DIR);
+	bzero(realpath,MAX_URL);bzero(boundary,128);
 	int i;
 	char *index;
 	//下面才是line-based text data:filename=xx&user=xx
