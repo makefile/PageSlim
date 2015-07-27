@@ -1,21 +1,29 @@
 #include "my_httpd.h"
-int doSlimSave(char *url,char *dir,char *name){
+int doSlimSave(char *url,char *dir,char *name){//name is in & out type
 	//call doSlim.py,save to /dir/filename,
 	//dir,name can be default,return filename
 	int status;
-	char workdir[]="/etc/pageSlim/";//but if i was run as daemon,maybe changed to work in /var/log for create sys logs
+	char workdir[]="core/";//but if i was run as daemon,maybe changed to work in /var/log for create sys logs
 	char command[MAX_URL+MAX_DIR+MAX_FN];//SO BIG
 	sprintf(command,"python %sdoSlim.py '%s' %s %s",
 			workdir,url,dir,name);
 //use single ' is for that linux shell won't take it as a back job if the url include symbol '&'
-//	info(command);
+	info(command);
 	status=system(command);//system is different from exc series fun,for system will block the parent process
 	//doSlim.py add the webpage name to a table,simplily just append to a file:newest
+	char status_code[5];
+	sprintf(status_code,"%d",status);
+	info("exec doSlim.py use system() end with status:");info(status_code);
+	
 	if(strcmp(name,"default")==0){
 		FILE *fp;
-		fp=fopen("/tmp/newest","r");
-		fgets(name,MAX_FN,fp);
-		fclose(fp);
+		fp=fopen("/dev/shm/newest","r");///tmp/newest
+		if(fp!=NULL){//file not exist,maybe caused by doSlim.py corrupt or OS problem
+			fgets(name,MAX_FN,fp);
+			fclose(fp);
+		}else{
+			info("WARNING:/dev/shm/newest not exist");//info(name);
+		}
 	}
 	//if(!WIFEXITED(status))
 	return status;
@@ -38,25 +46,27 @@ void responseDoSlim(FILE *client,char *req){
 	extern char webpage_root[];
 	char url[MAX_URL];char name[MAX_FN];char dir[MAX_DIR];
 	char msg[MAX_MSG];
-	char realpath[MAX_URL];
+	char realpath[MAXPATH];
+	char uid[MAX_UN];
 	int numchars=0;
 	char *match=NULL;
 	FILE *stream;
 	int filesize;
 	struct stat tmp;
 	bzero(url,MAX_URL);bzero(name,MAX_FN);
-	bzero(dir,MAX_DIR);bzero(realpath,MAX_URL);
+	bzero(dir,MAX_DIR);bzero(realpath,MAXPATH);
 	int i,j=0,url_len=strlen(req);
 	for(i=url_len-1;i>0;i--){
 		if(req[i]=='&') j++;
-		if(j==2) break;
+		if(j==3) break;
 	}
-	sscanf(&req[i],"&dir=%[^&]&name=%s",dir,name);//%*[^:]:%s
+	sscanf(&req[i],"&dir=%[^&]&name=%[^&]&uid=%s",dir,name,uid);//%*[^:]:%s
 //	info(name);
 	for(j=12;j<i;j++)
 		url[j-12]=req[j];
 	//sscanf(req,"/doslim?url=%[^&]&dir=%[^&]&name=%s",url,dir,name);//%*[^:]:%s
 	chinese2host(dir);chinese2host(name);
+	chinese2host(uid);
 	/*
 	match=strstr(url,"&dir=");
 	sscanf(match,"&dir=%s",dir);
@@ -67,11 +77,31 @@ void responseDoSlim(FILE *client,char *req){
 	//前面设置msg的大小时设小了，结果导致溢出了,结果真是吓人，浪费了我两个小时
 //	info(msg);
 	//if(strcmp(name,"default")==0),name will be modified in doSlimSave
-	sprintf(realpath,"%s/%s",webpage_root,dir);
-	doSlimSave(url,realpath,name);//save to file
-	bzero(realpath,MAX_URL);
+	sprintf(realpath,"%s/%s/%s",webpage_root,uid,dir);
+//	info(realpath);info(name);
+	int status=doSlimSave(url,realpath,name);//save to file
+	
+	if(!WIFEXITED(status)){//status==-1脚本异常中断
+		info("server corrupt:doSlim.py run with problem");
+		fprintf(client,"filename:server error\n");
+		fprintf(client,"**ERROR:server internel error!\n");
+		fflush(client);
+		return;
+	}
+	info("WIFEXITED");
+	status=WEXITSTATUS(status);
+	sprintf(realpath,"%d",status);
+	info("real status:");info(realpath);
+	if(status==2) {//没有被中断等，自行结束
+		info("notify client:URL is invalid");
+		fprintf(client,"filename:invalid\n");
+		fprintf(client,"**ERROR:URL is invalid or malformed!\n");
+		return;
+	}
+	
+	bzero(realpath,MAXPATH);
 //	info(webpage_root);
-	sprintf(realpath,"%s/%s/%s",webpage_root,dir,name);
+	sprintf(realpath,"%s/%s/%s/%s",webpage_root,uid,dir,name);
 //info(realpath);
 	if(stat(realpath,&tmp)==-1){//error,file not exist,for me,the file name maybe to long,exceed my limit:128
 		fprintf(client,"filename:%s\n",name);

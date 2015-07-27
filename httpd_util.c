@@ -5,12 +5,12 @@ void init_daemon(const char *pname,int facility){
 	signal(SIGTTIN,SIG_IGN);
 	signal(SIGTSTP,SIG_IGN);
 	signal(SIGHUP,SIG_IGN);
-	if(pid=fork()) exit(0);
+	if((pid=fork())>0) exit(0);
 	else if(pid<0){
 		perror("fork");exit(-1);
 	}
 	setsid();//设置新会话组长，新进程组长，脱离终端
-	if(pid=fork()) exit(0);//子进程不能再申请终端
+	if((pid=fork())) exit(0);//子进程不能再申请终端
 	else if(pid<0){
 		perror("fork");
 		exit(-1);
@@ -28,9 +28,9 @@ void init_daemon(const char *pname,int facility){
 }
 void info(char *msg){
 #if defined __DEBUG
-	syslog(LOG_INFO,"%s",msg);
-#else
 	fprintf(stderr,"%s\n",msg);
+#else
+	syslog(LOG_INFO,"%s",msg);
 #endif
 }
 void sendHead(FILE *sock){
@@ -46,59 +46,51 @@ void sendHead_sock(int sock){
 	send(sock,"Connection:close\r\n",17,0);
 }
 /*读取配置文件/etc/ my_httpd.conf,进行字符串匹配*/
-int get_arg(char *cmd,char *buf,char *glb_var){
-/*	FILE *fp;
-	char buf[1024];
-	fp=fopen("/etc/pageSlim/my_httpd.conf","r");
-	bytes_read=fread(buf,1,sizeof(buf),fp);//file size
-	fclose(fp);
-	if(bytes_read==0||bytes_read==sizeof(buffer)) 
-		return 0;//没读到或文件太大
-	buf[bytes_read]='\0';
-*/	size_t bytes_read;
+static int get_arg(char *buf){
+	size_t bytes_read;
 	char * match=NULL;
-//	extern char ip[],home_dir[],upload_root[],webpage_root[],port[],back[],username[],passwd[];
-	if(!strncmp(cmd,"home_dir",8)){
+	extern char ip[],home_dir[],upload_root[],webpage_root[],port[],back[];
+	if(!strncmp(buf,"home_dir",8)){
 		match=strstr(buf,"home_dir=");
 		if(match==NULL) return 0;
-		bytes_read=sscanf(match,"home_dir=%s",glb_var);
+		bytes_read=sscanf(match,"home_dir=%s",home_dir);
 		//bytes_read is 1
-		bytes_read=strlen(glb_var);
-		if(glb_var[bytes_read-1]=='/')
-			glb_var[bytes_read-1]='\0';
+		bytes_read=strlen(home_dir);
+		if(home_dir[bytes_read-1]=='/')
+			home_dir[bytes_read-1]='\0';
 		return bytes_read;
-	}else if(!strncmp(cmd,"upload_dir",10)){
+	}else if(!strncmp(buf,"upload_dir",10)){
 		match=strstr(buf,"upload_dir=");
 		if(match==NULL) return 0;
-		bytes_read=sscanf(match,"upload_dir=%s",glb_var);
-		bytes_read=strlen(glb_var);
-		if(glb_var[bytes_read-1]=='/')
-			glb_var[bytes_read-1]='\0';
+		bytes_read=sscanf(match,"upload_dir=%s",upload_root);
+		bytes_read=strlen(upload_root);
+		if(upload_root[bytes_read-1]=='/')
+			upload_root[bytes_read-1]='\0';
 		return bytes_read;
-	}else if(!strncmp(cmd,"webpage_dir",11)){
+	}else if(!strncmp(buf,"webpage_dir",11)){
 		match=strstr(buf,"webpage_dir=");
 		if(match==NULL) return 0;
-		bytes_read=sscanf(match,"webpage_dir=%s",glb_var);
-		bytes_read=strlen(glb_var);
-		if(glb_var[bytes_read-1]=='/')
-			glb_var[bytes_read-1]='\0';
+		bytes_read=sscanf(match,"webpage_dir=%s",webpage_root);
+		bytes_read=strlen(webpage_root);
+		if(webpage_root[bytes_read-1]=='/')
+			webpage_root[bytes_read-1]='\0';
 		return bytes_read;
-	}else if(!strncmp(cmd,"port",4)){
+	}else if(!strncmp(buf,"port",4)){
 		match=strstr(buf,"port=");
 		if(match==NULL) return 0;
-		bytes_read=sscanf(match,"port=%s",glb_var);
+		bytes_read=sscanf(match,"port=%s",port);
 		return bytes_read;
-	}else if(!strncmp(cmd,"ip",4)){
+	}else if(!strncmp(buf,"ip",2)){
 		match=strstr(buf,"ip=");
 		if(match==NULL) return 0;
-		bytes_read=sscanf(match,"ip=%s",glb_var);
+		bytes_read=sscanf(match,"ip=%s",ip);
 		return bytes_read;
-	}else if(!strncmp(cmd,"back",4)){
+	}else if(!strncmp(buf,"back",4)){
 		match=strstr(buf,"back=");
 		if(match==NULL) return 0;
-		bytes_read=sscanf(match,"back=%s",glb_var);
+		bytes_read=sscanf(match,"back=%s",back);
 		return bytes_read;
-	}else if(!strncmp(cmd,"username",8)){
+/*	}else if(!strncmp(cmd,"username",8)){
 		match=strstr(buf,"username=");
 		if(match==NULL) return 0;
 		bytes_read=sscanf(match,"username=%s",glb_var);
@@ -108,36 +100,39 @@ int get_arg(char *cmd,char *buf,char *glb_var){
 		if(match==NULL) return 0;
 		bytes_read=sscanf(match,"passwd=%s",glb_var);
 		return bytes_read;
+*/
 	}else return 0;
 }
 int getAllArg(){//上面的get_arg写的罗嗦了一些，但为了方便以后提取单个属性
-	FILE *fp;
-	char buf[1024];
+	FILE *fp;//从配置文件读取参数
+	//char buf[1024];
+	char line[512];//max len
 	size_t bytes_read;
-	char * match=NULL;
-	extern char ip[],home_dir[],upload_root[],webpage_root[],port[],back[],username[],passwd[];
-	fp=fopen("/etc/pageSlim/my_httpd.conf","r");
-	bytes_read=fread(buf,1,sizeof(buf),fp);//file size
+//	char * match=NULL;
+	extern char ip[],home_dir[],upload_root[],webpage_root[],port[],back[];//,username[],passwd[];
+	//默认初始值，被配置文件中的值所覆盖
+	sprintf(home_dir,"%s","/tmp");
+	sprintf(upload_root,"%s","/var/www");
+	sprintf(webpage_root,"%s","/var/www");
+	sprintf(port,"%s","80");//默认80
+	sprintf(back,"%s","5");
+	fp=fopen("etc/my_httpd.conf","r");
+	while(!feof(fp)){
+		fgets(line,sizeof(line),fp);  //读取一行
+		if(strlen(line)<2) continue;//null or #
+		get_arg(line);
+	}
 	fclose(fp);
-	if(bytes_read==0||bytes_read==sizeof(buf)) 
-		return 0;//没读到或文件太大
-	buf[bytes_read]='\0';
-	if(get_arg("home_dir",buf,home_dir)==0)//从配置文件读取参数
-		sprintf(home_dir,"%s","/tmp");
-//	info(home_dir);
-	if(get_arg("upload_dir",buf,upload_root)==0) 
-		sprintf(upload_root,"%s","/var/www");
-	if(get_arg("webpage_dir",buf,webpage_root)==0) 
-		sprintf(webpage_root,"%s","/var/www");
-	if(get_arg("ip",buf,ip)==0) get_addr("eth0");//本机ip
-	if(get_arg("port",buf,port)==0) sprintf(port,"%s","80");//默认80
-	if(get_arg("back",buf,back)==0) sprintf(back,"%s","5");
-	if(get_arg("username",buf,username)==0) sprintf(username,"%s","admin");
-	if(get_arg("passwd",buf,passwd)==0) sprintf(passwd,"%s","");
+	if(strlen(ip)==0) get_addr("eth0");//本机ip
+	/*if(get_arg("ip",buf,ip)==0) {
+		//info("get arg ip ==0:");info(ip);
+		get_addr("eth0");//本机ip
+	}*/
 	return 1;
 }
 char *chinese2host(char *path){
-	int fd,len,ret,i=0,sum=0;
+//注意传进来的只能是数组或指针，而不能是字符串常量（因为不能被赋值，造成段错误）	
+	int len,ret,i=0;
 	char chinese[MAXPATH];
 	for(ret=0,len=strlen(path);ret<len;ret++){
 		if(path[ret]=='%') {
@@ -157,4 +152,12 @@ char *chinese2host(char *path){
 	if(i>0) strcpy(path,chinese);
 	return path;
 }
-
+//the s,t has same prefix,return the extra segement of s
+char *dfstr(char *s,char *t){
+	int i=strlen(s);
+	int len=strlen(t);
+	len=len<i?len:i;
+	i=0;
+	while(i<len&&s[i]==t[i]) i++;
+	return &s[i];
+}

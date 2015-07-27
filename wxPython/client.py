@@ -9,16 +9,23 @@ import httplib
 import sys 
 import os
 import socket
-socket.setdefaulttimeout(10) #global
+import cStringIO
+#import io
+from PIL import Image #dont use import Image ,maybe different
+
+socket.setdefaulttimeout(15) #global
 reload(sys) 
 sys.setdefaultencoding('utf-8')
 #如果不设置编码，则unicode等问题较麻烦,in windows,just use u'xxx'
-class Frame(wx.Frame):
+from gui import MsgDialog
+import wx.richtext as rt
+class MainFrame(wx.Frame):
 	def __init__(
 			self, parent=None, id=wx.ID_ANY, title='网文快存', pos=wx.DefaultPosition,
-			size=wx.DEFAULT, style=wx.DEFAULT_FRAME_STYLE):
+			size=(776, 480), style=wx.DEFAULT_FRAME_STYLE):#size=wx.DEFAULT
 		
 		wx.Frame.__init__(self, parent, id, title, pos, size, style)
+		
 		self.SetIcon(wx.Icon('eye.png', wx.BITMAP_TYPE_PNG))   #loadIcon.ico
 		menubar=wx.MenuBar()
 		file_menu=wx.Menu()  	  
@@ -63,7 +70,10 @@ class Frame(wx.Frame):
 		self.Bind(wx.EVT_ICONIZE, self.OnIconfiy) # What is the meaning?设置缩小到底部任务栏和恢复时做的动作，比如发出提示，声音等
 
 #urlLabel = wx.StaticText(panel, -1, "URL:")  
-		self.urlText = wx.TextCtrl(panel, -1, "http://www.linuxfan.com:1366/program/pageSlimer/linux-usage.html",size=(250, 38), style=wx.TE_MULTILINE)  #创建一个文本控件
+		default_url='http://localhost/test.html'
+		#"http://www.weixinxi.wang/blog/aitrcle.html?id=9";
+		#"http://www.linuxfan.com:1366/program/pageSlimer/linux-usage.html"
+		self.urlText = wx.TextCtrl(panel, -1, default_url,size=(250, 38), style=wx.TE_MULTILINE)  #创建一个文本控件
 		titleLabel = wx.StaticText(panel, -1, "标题:") 
 		titleLabel.SetForegroundColour('blue') 
 		self.titleText = wx.TextCtrl(panel, -1, "",size=(200, 30))
@@ -73,9 +83,12 @@ class Frame(wx.Frame):
 		catalogLabel.SetForegroundColour('blue') 
 		self.catalogText = wx.TextCtrl(panel, -1, "default",size=(200, 30))
 		richTextLabel = wx.StaticText(panel, -1, "正文(可编辑):")
-		self.richText = wx.TextCtrl(panel, -1, "\n\n\n\n\t\t\t\t\t\t\t\t\t^_^",style=wx.TE_MULTILINE|wx.TE_RICH2) #创建丰富文本控件
-		self.richText.SetInsertionPoint(0)  
+		#self.richText = wx.TextCtrl(panel, -1, "\n\n\n\n\t\t\t\t\t\t\t\t\t^_^",style=wx.TE_MULTILINE|wx.TE_RICH2) #创建丰富文本控件
+		self.richText = rt.RichTextCtrl(panel, -1)
+		#self.richText.SetInsertionPoint(0)  
 		self.richText.SetForegroundColour('blue')
+		#self.richText.WriteImage(wx.Image('../core/image/UF3ui2.jpg',wx.BITMAP_TYPE_ANY))
+		#self.richText.Newline()
 		#self.richText.SetDefaultStyle(wx.TextAttr("blue")) #设置文本样式,从1到4的字符，前景色，背景色
 		#points = self.richText.GetFont().GetPointSize()   
 		#f = wx.Font(points + 3, wx.ROMAN, wx.ITALIC, wx.BOLD, True) #创建一个字体  
@@ -114,9 +127,17 @@ class Frame(wx.Frame):
 
 		#sizer.AddMany([urlLabel, 	self.urlText,button1,titleLabel,self.titleText,-1 ,richTextLabel,self.richText,-1])  
 		panel.SetSizer(vbox)
+		self.clip = wx.TheClipboard #系统剪贴板,但是用wx.Clipboard()却不正确，很奇怪
+		#http://www.wxpython.org/docs/api/wx.Clipboard-class.html
+		#当左键点击窗口上任意普通位置时查看系统剪贴板是否有新网址，或在重绘时wx.EVT_PAINT
+		#panel.Bind(wx.EVT_LEFT_DOWN, self.OnClickCheck)#对panel有效，但不知为什么对frame无效，改成：
+		self.Bind(wx.EVT_ENTER_WINDOW,self.OnEnterWin)
 		self.host=''
 		self.filename=''
+		self.user=''
+		self.pw=''
 		self.readConfigure()
+		
 	def OnHide(self, event):
 		self.Hide()
 	def OnGet(self, event):
@@ -127,7 +148,7 @@ class Frame(wx.Frame):
 			wx.MessageBox('您还没输入网址','^0^')
 			return
 		try:
-			src=urllib.urlopen('http://'+self.host+'/doslim?url='+url+'&dir='+catalog+'&name=default')
+			src=urllib.urlopen('http://'+self.host+'/doslim?url='+url+'&dir='+catalog+'&name=default'+'&uid='+self.user)
 #so strange that the urllib2.urlopen not work properly at times,is it beacause the server i write has problem of sending packet headers?
 			text=src.read()
 			src.close()
@@ -143,10 +164,48 @@ class Frame(wx.Frame):
 			#		text=re.sub('^filename:%s'%self.filename,'',text)
 			text=text.replace('filename:%s'%self.filename,'')
 			self.titleText.SetValue(self.filename)
-			self.richText.SetValue(text.strip())
+			self.showContent(text.strip()) #content text has some format such as URL 
 		except Exception,e:
 			print e
 			wx.MessageBox('请检查您的网络', '网络连接出错')
+	def showContent(self,content):#解析文本内容中的特殊部分，如图片地址，显示到富文本框
+		#[[<img src="/image/imgFilename">]],服务器地址因该是/uid/catagrory/image/filename
+		#self.richText.WriteText(content)
+		#self.richText.WriteText('-------------------\n')
+		self.richText.SetValue('')
+		lines=content.split('\n')
+		for ln in lines:
+			if ln.find('##<img src=') >=0:
+				pat=re.compile(r'##<img src="(.*?)"/>##')
+				try:
+					img_src=pat.findall(ln)[0]
+					print 'find img_src:',img_src
+					catalog=self.catalogText.GetValue().strip()
+					url='http://'+self.host+'/dl?'+self.user+'/'+catalog+img_src
+					img_str=urllib2.urlopen(url).read() #type str
+					print 'size:',len(img_str)
+					image_i = cStringIO.StringIO(img_str)
+				#	print 'type of image_file:',type(image_file)
+					pil_image=Image.open(image_i)
+					wx_img=self.PILToWX(pil_image)
+					self.richText.WriteImage(wx_img)
+				#	self.richText.AddImage(image)
+				except Exception,e:
+					print e
+			else :
+				self.richText.WriteText(ln)#AppendText(ln)
+			self.richText.Newline()
+		#self.richText.SetValue(content)
+		#self.richText.WriteImage(wx.Image('../core/image/UF3ui2.jpg',wx.BITMAP_TYPE_ANY))
+	def PILToWX(self, pil_image):
+		#"convert a PIL imageto a wxImage"
+		if pil_image.mode != 'RGB': # SetData() requires an RGB image
+			pil_image = pil_image.convert('RGB')
+		imageData = pil_image.tostring('raw', 'RGB')
+		imageWx = wx.EmptyImage(pil_image.size[0], pil_image.size[1])
+		imageWx.SetData(imageData)
+		return imageWx
+		#bitmap = wx.BitmapFromImage(image)
 	def OnIconfiy(self, event):
 		wx.MessageBox('好好学习，天天向上!', '*送你一句良言*')
 		event.Skip()
@@ -162,11 +221,13 @@ class Frame(wx.Frame):
 		text=self.richText.GetValue()
 		catalog=self.catalogText.GetValue().strip()
 		if text==None or catalog==None:
+			wx.MessageBox('不能为空', '上传失败')
 			return
 		boundary='---------%s'%hex(int(time.time()*1000))
 		data=[] #a list
 #	data.append('\r\n')
 		data.append('--%s'%boundary)
+		data.append('uid=%s'%self.user)#username uid
 		data.append('dir=%s'%catalog)#= not : in my server
 #	print 'append data name:',self.filename
 		data.append('filename=%s'%self.filename)
@@ -210,7 +271,10 @@ class Frame(wx.Frame):
 					self.host=data[5:].strip()#ip or domain,include port
 				elif(data[:7]=='catalog'):
 					self.catalogText.SetValue(data[8:].strip())
-			
+				elif(data[:2]=='id'):
+					self.user=data[3:].strip()
+				elif(data[:2]=='pw'):
+					self.pw=data[3:].strip()
 			fh.close()
 		except:
 			self.host='configuration not found!'
@@ -253,6 +317,27 @@ class Frame(wx.Frame):
 		set_win = Setting(size=(476, 280))  #640,480 #1.618:1
 		set_win.Centre()
 		set_win.Show()
+	def OnEnterWin(self, evt):
+		#print 'on enter win'
+		text_obj = wx.TextDataObject()
+		if self.clip.IsOpened() or self.clip.Open():
+			if self.clip.GetData(text_obj):
+				text_str=text_obj.GetText()
+				#print 'get text from clipboard',text_str
+				#check if the text is formal URL
+				if text_str !='' and re.match(r'^https?:/{2}\w.+$', text_str): #OK
+					#compare with the URL in input
+					old_url=self.urlText.GetValue().strip()
+					if text_str !=old_url :
+						self.urlText.SetValue(text_str)
+					#	dlg = MsgDialog('URL已粘贴到输入框', '提示', ttl=2)               
+		    		#		dlg.ShowModal()
+			self.clip.Close()
+	def showUp(self):
+		#app = wx.PySimpleApp()
+		self.Centre()
+		self.Show() #可以让它设置是否在程序启动时一起显示出来
+		#app.MainLoop()	
 class Setting(wx.Frame):
 	def __init__(
 			self, parent=None, id=wx.ID_ANY, title='设置', pos=wx.DefaultPosition,
@@ -325,6 +410,8 @@ class Setting(wx.Frame):
 		fh.write('#pageSlimer server configuration\n#addr=(ip/domain):(port)\n')
 		fh.write('addr=%s:%s'%(host,port))#will not write \n to the end
 		fh.write('\ncatalog=%s'%catalog)
+		fh.write('\nid=%s'%self.user)
+		fh.write('\npw=%s'%self.pw)
 		fh.close()
 		self.Destroy()
 	def OnCancel(self,event):
@@ -333,8 +420,8 @@ class Setting(wx.Frame):
 		#pass
 		
 def TestFrame():
-	app = wx.PySimpleApp()
-	frame = Frame(size=(776, 480))  #640,480 #1.618:1
+	app = wx.App() #wx.PySimpleApp()
+	frame = MainFrame(size=(776, 480))  #640,480 #1.618:1
 
 	frame.Centre()
 	frame.Show() #可以让它设置是否在程序启动时一起显示出来
@@ -345,5 +432,4 @@ if __name__ == '__main__':
 #		text=src.read()
 #		src.close()
 #		print 'text:',text[0:40]
-
 		TestFrame()

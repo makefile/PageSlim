@@ -20,8 +20,8 @@
 #include<time.h>
 #include<fcntl.h>//O_RDONLY
 
-//#define __DEBUG 1
-#define MAXPATH 512
+#define __DEBUG 1
+#define MAXPATH 1024
 #define MAXBUF 1024
 #define NOFILE 8
 #define MAX_FILE_SIZE 4096000//less than 4MB,4096*1024
@@ -34,7 +34,7 @@ char buffer[MAXBUF+1];
 //#define MAX_
 //#define MAX_
 extern void init_daemon(const char *program,int facility);
-extern int get_arg(char *cmd,char *buf,char *glb_var);
+//extern int get_arg(char *cmd,char *buf,char *glb_var);
 extern int getAllArg();
 extern void info(char *msg);
 extern void handleTCPClient(int sock);
@@ -52,4 +52,12 @@ extern int get_line(int sock,char*buf,int size);
 extern void sendHead(FILE *client);
 extern void sendHead_sock(int sock);
 extern int delete_file(char *fn);
-extern char* formatText(char *text);
+extern char* formatText(char *text,int len);
+extern char* init_read(char *indexHtml);
+extern void showIndexHtml(FILE* client);
+extern void showFavicon(FILE* client);
+extern void browser_login(FILE* client,char *req);
+extern void login_auth(FILE *client,char *req);
+extern int check_passwd(char * uid,char* passwd);
+extern void listHomeFiles(FILE* client,char *req);
+extern char* dfstr(char *s,char *t);

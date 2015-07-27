@@ -3,6 +3,7 @@
 void modify(int sock_fd,int len){
 	char filename[MAX_FN];char dir[MAX_DIR];
 	char realpath[MAX_URL];char boundary[128];
+	char uid[MAX_UN];
 	bzero(filename,MAX_FN);bzero(dir,MAX_DIR);
 	bzero(realpath,MAX_URL);bzero(boundary,128);
 	int i;
@@ -15,6 +16,8 @@ void modify(int sock_fd,int len){
 			strcpy(boundary,buffer);
 			boundary[numchars-1]='\0';//boundary[numbers-1] is '\n'
 //			info(boundary);
+		}else if ((index=strstr(buffer, "uid=")) !=NULL){
+			sscanf(index,"uid=%s",uid);
 		}else if ((index=strstr(buffer, "filename=")) !=NULL){
 			sscanf(index,"filename=%s",filename);
 //			info("the file name is:");info(filename);
@@ -28,8 +31,9 @@ void modify(int sock_fd,int len){
 		numchars = get_line(sock_fd, buffer,MAXBUF);
 	}
 	chinese2host(dir);chinese2host(filename);
+	chinese2host(uid);
 	extern char webpage_root[];
-	sprintf(realpath,"%s/%s/%s",webpage_root,dir,filename);
+	sprintf(realpath,"%s/%s/%s/%s",webpage_root,uid,dir,filename);
 	FILE *fp;
 	fp=fopen(realpath,"w");
 	if(fp==NULL) info("create file error");

@@ -1,12 +1,12 @@
 #include "my_httpd.h"
 #include "cJSON.h"
-char *formatText(char *text);
+char *formatText(char *text,int len);
 //int hexstr2int(char x,char y);
 char *postfix(char *file);
 void listHomeFiles(FILE *client_sock,char *path);
 void showSlimList(FILE *client,char *req);
 void echoSlimPage(FILE *client,char *req);
-void login_auth(FILE *client,char *req);
+
 void delete_page(FILE *client,char *req);
 //void signup(FILE *client,char *req);
 /*
@@ -14,6 +14,7 @@ void delete_page(FILE *client,char *req);
    */
 //the path is request,such as /blog,/showAll,not always be directory
 void GiveResponse(FILE *client,char *req){
+//	extern char webpage_root[],home_dir[];
 	if(strncasecmp(req,"/doslim",7)==0){//request doSlim
 		responseDoSlim(client,req);
 		return ;
@@ -25,15 +26,23 @@ void GiveResponse(FILE *client,char *req){
 	else if(strncasecmp(req,"/view",5)==0)
 		echoSlimPage(client,req);
 	//目前由于存储区域未进行按用户划分，因此验证登录多用户无现实意义
-	//可以针对管理员设置密码，验证身份
+	//可以针对管理员设置密码，验证身份,used by android
 	else if(strncasecmp(req,"/login",6)==0)
 		login_auth(client,req);//?un=xx&pw=xx (md5)
 //	else if(strncasecmp(req,"/signup",7)==0)
 //		signup(client,req);//registe
 	else if(strncasecmp(req,"/delete",7)==0)
 		delete_page(client,req);//?abs=xx&un=xx&pw=xx
-//	else if(strstr(webpage_root,req)!=NULL)
-	else listHomeFiles(client,req);
+	else if(strcmp(req,"/")==0)//index.html
+		showIndexHtml(client);
+	else if(strncasecmp(req,"/favicon",8)==0)///favicon.ico
+		showFavicon(client);
+	else if(strncasecmp(req,"/check!account.action",21)==0)
+		browser_login(client,req);
+	else if(strncasecmp(req,"/visitor!view.action",20)==0){
+		strcpy(req,"/");
+		listHomeFiles(client,req);//dfstr(webpage_root,home_dir)
+	}else listHomeFiles(client,req);//包含处理文件展示，浏览器在打开一个网站时会请求/favicon
 }
 /*将webpage_root下的所有文件夹下的文件名列成树形JSON列表
 需要递归访问每个文件夹并填写JSON数据，这样客户端可以查看整个列表而不用多次访问网络
@@ -42,7 +51,7 @@ void makeJson(char *abspath,cJSON *parent){//in curse,absolute path
 	struct dirent *dirent;//dirent may statically a
 	struct stat fileinfo;
 	DIR *dir;
-	char subdir[MAX_DIR];
+	char subdir[MAXPATH];
 	cJSON *sub ;
 	stat(abspath,&fileinfo);
 	if(S_ISREG(fileinfo.st_mode)){//st_mtime
@@ -66,14 +75,19 @@ void makeJson(char *abspath,cJSON *parent){//in curse,absolute path
    */
 void showSlimList(FILE *client,char *req){
 	extern char webpage_root[];
-	sendHead(client);
+	char uid[MAX_UN];
+	sscanf(req,"/showlist?uid=%s",uid);
+	chinese2host(uid);
+	char abspath[MAXPATH];
+	sprintf(abspath,"%s/%s",webpage_root,uid);
 	cJSON *root;
 	root = cJSON_CreateObject();
-	makeJson(webpage_root,root);
+	makeJson(abspath,root);
 	info("send json");
 	char *result = cJSON_Print(root);
 //	info("the json is:");//send
 //	info(result);//send,puts
+	sendHead(client);
 	fputs(result,client);
 	fflush(client);
 	free(result);
@@ -118,6 +132,8 @@ void echoSlimPage(FILE *client,char *req){
 	fflush(client);
 	free(p);
 }
+/*浏览器会列出文件目录，客户端可以在path头部加dl?来下载文件而不以网页形式查看
+*/
 void listHomeFiles(FILE *client_sock,char *path){
 	struct dirent *dirent;
 	struct stat fileinfo;
@@ -132,17 +148,28 @@ void listHomeFiles(FILE *client_sock,char *path){
 	extern char home_dir[],ip[],port[],webpage_root[];
 	//extern char packHead_close[];
 	//目前未容许选择可上传到的路径，统一放在/upload目录下
-	char uploadHtml[]="<form method=\"POST\" action=\"/upload\" enctype=\"multipart/form-data\">上传文件"
-		"<input name=\"image\" type=\"file\" />"
-		"<input type=\"submit\" value=\"Upload\" /></form>";
+	char uploadHtml[MAXPATH+512];
+	sprintf(uploadHtml,"<form method=\"POST\" action=\"/upload?%s\""
+		" enctype=\"multipart/form-data\">上传文件"
+		"<input name=\"xx\" type=\"file\" />"
+		"<input type=\"submit\" value=\"上传\" /></form>"
+		,path);
 	//the action will exist in the head:POST /dir HTTP...
 	//将url的16进制编码的中文名还原成主机能够识别的编码
 	chinese2host(path);
+	info("start list web page");
+	
 	//因请求的文件是以服务器主目录为根目录如/var/www/,因此需要加该根目录才是绝对路径
-	len=strlen(home_dir)+strlen(path)+1;
+	len=strlen(webpage_root)+strlen(path)+1;//home_dir is /home/fyk ...
 	realpath=malloc(len+1);
 	bzero(realpath,len+1);
-	sprintf(realpath,"%s%s",home_dir,path);
+	int isDownload=0;
+	if(strncmp("/dl?",path,4)==0){
+		isDownload=1;
+		sprintf(realpath,"%s/%s",webpage_root,path+4);
+	}else
+		sprintf(realpath,"%s%s",webpage_root,path);//home_dir
+	info(realpath);
 	//get port
 	len=strlen(port)+1;
 	nport=malloc(len+1);
@@ -150,62 +177,70 @@ void listHomeFiles(FILE *client_sock,char *path){
 	sprintf(nport,":%s",port);
 	//file state
 	if(stat(realpath,&fileinfo)){//fail
-		sendHead(client_sock);
-		fprintf(client_sock,"<html lang=\"zh-cn\"><html><head><meta charset=\"utf-8\"><title>%d - %s</title></head>"
-			"<body><font size=+4>Linux HTTP server</font><br><hr width=\"100%%\"><br><center><table border cols=3 width=\"100%%\"></table><font color=\"CC0000\" size=+2> connect to administrator,error path is: \n%s %s</font></body></html>",errno,strerror(errno),path,strerror(errno));
+		if(isDownload){
+			fprintf(client_sock,"HTTP/1.1 404 Not Found\r\nServer:Test http server\r\nConnection: Close\r\nContent-Length: 0\r\n\r\n");
+		}else{
+			sendHead(client_sock);
+			fprintf(client_sock,"<html lang=\"zh-cn\"><html><head><meta charset=\"utf-8\"><title>%d - %s</title></head>"
+			"<body><font size=+4>Linux HTTP server</font><br><hr width=\"100%%\"><br><center><table border cols=3 width=\"100%%\"></table><font color=\"CC0000\" size=+2> Contact the administrator,error path is: \n%s %s</font></body></html>",errno,strerror(errno),path,strerror(errno));
+		}
+	//	fflush(client_sock);
 		goto out;
 	}
 	if(S_ISREG(fileinfo.st_mode)){//send file content
 		fd=open(realpath,O_RDONLY);
 		len=lseek(fd,0,SEEK_END);
-		p=(char *)malloc(len+2048);//plus 2048 is due to i when display the text,need extra space:'<' changes to &#60;
-		bzero(p,len+2048);
+		p=(char *)malloc(len+4096);//plus 2048 is due to i when display the text,need extra space:'<' changes to &#60;
+		bzero(p,len+4096);
 //		info(realpath);info(webpage_root);
-		if(strncmp(realpath,webpage_root,strlen(webpage_root))==0){
-			sprintf(p,"/view?resp=html&dir=%s",realpath);
-			echoHtmlPage(client_sock,p);
-			free(p);
-			close(fd);
-			goto out;
-		}
+
 		lseek(fd,0,SEEK_SET);
 		ret=read(fd,p,len);//一次性读取文件，对于大文件会出错，有时间再改，分批读取和传送文件
 //		char logmsg[MAX_MSG];
 		if(ret<0) info("read fail");
-		close(fd);		
-		char *type=postfix(path);
-		if(strcmp("c",type)==0||strcmp("java",type)==0
-			||strcmp("py",type)==0||strcmp("txt",type)==0){
-		//<的转义序列为&lt; or &#60;,> &gt; &#62;,&的转义为&amp; or &#38; 不转义的话<stdio.h>被当作标签，但不显示
-			sendHead(client_sock);
-			fprintf(client_sock,"<html lang=\"zh-cn\"><html><head><meta charset=\"utf-8\"><title>content of %s</title></head><body><font size=+4>网文快传-Server</font><br><hr width=\"100%%\"><br><font color=\"119966\" size=+3>%s</font></body></html>"//<center>
-					,path,formatText(p));
-		}else if(strcmp("jpg",type)==0||strcmp("png",type)==0){
-			fprintf(client_sock,"HTTP/1.1 200 OK\r\nServer:Test http server\r\nConnection:keep-alive\r\nContent-type:image\r\nContent-Length: %d\r\n\r\n",len);
-			fwrite(p,len,1,client_sock);//send file content
-			
-		}else if(strcmp("html",type)==0){
-			sendHead(client_sock);
-			fwrite(p,len,1,client_sock);//send file content
-		}else{
+		close(fd);
+		if(isDownload){
 			fprintf(client_sock,"HTTP/1.1 200 OK\r\nServer:Test http server\r\nConnection:keep-alive\r\nContent-type:application/*\r\nContent-Length:%d\r\n\r\n",len);
 			//for transport file,so keep-alive
 			fwrite(p,len,1,client_sock);//send file content
+		}else{	
+			char *type=postfix(path);
+			if(strcmp("c",type)==0||strcmp("java",type)==0
+				||strcmp("py",type)==0||strcmp("txt",type)==0){
+			//<的转义序列为&lt; or &#60;,> &gt; &#62;,&的转义为&amp; or &#38; 不转义的话<stdio.h>被当作标签，但不显示
+				sendHead(client_sock);
+				fprintf(client_sock,"<html lang=\"zh-cn\"><html><head><meta charset=\"utf-8\"><title>content of %s</title></head><body><font size=+4>网文快传-Server</font><br><hr width=\"100%%\"><br><font color=\"119966\" size=+3>%s</font></body></html>"//<center>
+						,path,formatText(p,len));
+			}else if(strcmp("jpg",type)==0||strcmp("png",type)==0){
+				fprintf(client_sock,"HTTP/1.1 200 OK\r\nServer:Test http server\r\nConnection:keep-alive\r\nContent-type:image\r\nContent-Length: %d\r\n\r\n",len);
+				fwrite(p,len,1,client_sock);//send file content
+				
+			}else if(strcmp("html",type)==0){
+				sendHead(client_sock);
+				fwrite(p,len,1,client_sock);//send file content
+			}else{
+				//对于webpage_root下的文件，需要在线观看。无需提供下载服务，因为客户端浏览器有保存的功能
+			//	if(strncmp(realpath,webpage_root,strlen(webpage_root))==0){
+				sprintf(p,"/view?resp=html&dir=%s",realpath);
+			//	info("echoHtmlPage:");
+				echoHtmlPage(client_sock,p);
+			}
 		}
 		free(p);
 	}else if(S_ISDIR(fileinfo.st_mode)){
 		dir=opendir(realpath);
-		sendHead(client_sock);
-		fprintf(client_sock,"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\"><html lang=\"zh-cn\"><html><head><meta charset=\"utf-8\"><title>%s</title></head><body><font size=+4>网文快传-Server</font><br><hr width=\"100%%\"><br>%s<center>"
+		//if(strcmp(path,"/")!=0)//first login,in GET method,no need to send header info
+			sendHead(client_sock);
+		fprintf(client_sock,"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\"><html lang=\"zh-cn\"><html><head><meta charset=\"utf-8\"><title>%s</title></head><body><font color=\"green\" size=+4>网文快传-Server</font><br><hr width=\"100%%\"><br>%s<center>"
 			"<table border cols=3 width=\"100%%\">",path
 				,uploadHtml);
 		fprintf(client_sock,"<caption><font size=+3> Directory %s</font></caption>\n",path);//表格头信息，便于显示
-		fprintf(client_sock,"<tr><th>name</th><th>type</th><th>owner</th><th>group</th><th aligh=\"center\">size</th><th>modify time</th></tr>\n");
+		fprintf(client_sock,"<tr><th><a href=\"http://%s%s%s\">..上一级..</a></th><th>type</th><th>owner</th><th>group</th><th aligh=\"center\">size</th><th>modify time</th></tr>\n",ip,atoi(port)==80?"":nport,dir_up(path));
 		if(dir==NULL){//打开目录失败
 			fprintf(client_sock,"</table><font color=\"CC0000\" size=+2>%s</font></body></html>",strerror(errno));
 			return ;
 		}
-		fprintf(client_sock,"<th><a href=\"http://%s%s%s\">..parent..</a></th><br>",ip,atoi(port)==80?"":nport,dir_up(path));//go to parent dir
+//		fprintf(client_sock,"<th><a href=\"http://%s%s%s\">..上一级..</a></th><br>",ip,atoi(port)==80?"":nport,dir_up(path));//go to parent dir
 		while((dirent=readdir(dir))!=NULL){
 			if(strcmp(path,"/")==0)//website root,no display parent fold
 				sprintf(Filename,"/%s",dirent->d_name);
@@ -214,10 +249,10 @@ void listHomeFiles(FILE *client_sock,char *path){
 			if(dirent->d_name[0]=='.')
 				continue;//隐藏文件不列出,以及..和.
 			fprintf(client_sock,"<tr>");
-			len=strlen(home_dir)+strlen(Filename)+1;
+			len=strlen(webpage_root)+strlen(Filename)+1;
 			realFilename=malloc(len+1);
 			bzero(realFilename,len+1);
-			sprintf(realFilename,"%s/%s",home_dir,Filename);//主机上的绝对路径
+			sprintf(realFilename,"%s%s",webpage_root,Filename);//主机上的绝对路径
 			if(stat(realFilename,&fileinfo)==0){
 				 fprintf(client_sock,"<td><a href=\"http://%s%s%s\">%s</a></td>",ip,atoi(port)==80?"":nport,Filename,dirent->d_name);
 				//p_time=ctime(&info.st_mtime);
@@ -238,6 +273,7 @@ void listHomeFiles(FILE *client_sock,char *path){
 		fprintf(client_sock,"</table><font color=\"CC0000\" size=+2> you access resource '%s' forbid to access,communicate with the admintor </font></body></html>",path);
 	}
 out:
+	fflush(client_sock);
 	free(realpath);
 	free(nport);
 }
@@ -258,9 +294,11 @@ char *dir_up(char *dirpath){
 	strcpy(Path,dirpath);
 	len=strlen(Path);
 	if(len>1&&Path[len-1]=='/') len--;
-	while(Path[len-1]!='/'&&len>1)
+	while(Path[len]!='/'&&len>1)
 		len--;
-	Path[len]=0;
+	while(Path[len]=='/'&&len>1)
+		len--;
+	Path[len+1]=0;
 	return Path;
 }
 
@@ -278,12 +316,13 @@ int get_addr(char *str){
 	return 0;
 }
 	
-char *formatText(char *text){
+char *formatText(char *text,int len){
 	int i=0,j=0;
-	char *ft=malloc(strlen(text)*10);//设小了不行，double free or corruption
+	char *ft=malloc(len*6);//设小了不行，double free or corruption
 	//it is big bug use sizeof(text),because big file will overflow
 //	memset(ft,0,(ft));
 	//the size of space ,use strcpy +1,not sizeof.
+	int z=0;
 	while(text[i]!='\0'){
 		if(text[i]=='<')
 			strncpy(ft+j,"&#60;",5);
@@ -301,7 +340,14 @@ char *formatText(char *text){
 		//但可在<pre></pre>标签中使用&#9;表示
 			strncpy(ft+j,"&nbsp;&nbsp;&nbsp;&nbsp;",24);
 			j+=19;
-		}
+	/*	}else if(text[i]=='#' &&
+			strncasecmp(text+i,"##<img src=",11)==0){//##<img src=.../>##
+				for(z=i+11;;z++){
+					if(text[z]=='#'&&text[z+1]=='#') break;
+				}
+				strncpy(ft+j,text+i+2,z-i-2);
+				j+=z-i-3;//has 4 #
+	*/	}
 		else {
 			ft[j]=text[i];
 			j-=4;
@@ -310,7 +356,7 @@ char *formatText(char *text){
 		j+=5;
 	}
 	ft[j]='\0';
-	text=realloc(text,strlen(ft));
+	text=realloc(text,j+1);
 	//the original text size is too small,and cause error:double free or corruption
 	strcpy(text,ft);
 	free(ft);
@@ -338,32 +384,17 @@ char *postfix(char *file){
 	}
 	return &file[lastIndex+1];
 }
-//strrchr(.)获得.后边的扩展名
-void login_auth(FILE *client,char *req){
-	char user[MAX_UN],pw[MAX_UN];
-	extern char username[],passwd[];
-	sscanf(req,"/login?un=%[^&]&pw=%s",user,pw);
-	chinese2host(user);
-	sendHead(client);//200 OK
-//	info("conf:username:");info(username);
-//	info(passwd);
-	if(strcmp(user,username)==0
-			&&strncasecmp(pw,passwd,strlen(passwd))==0)
-		fputs("login_ok",client);
-	else fputs("login_deny",client);
-	fflush(client);
-}
+
 void delete_page(FILE *client,char *req){
 	//delete the saved html slimed page,for security check the username and passwd and modified to /delete/(abs)/php_(un)_(pw).jsp this requests that the un and pw should not includeunderline and dot
 	char user[MAX_UN],pw[MAX_UN],abspath[MAXPATH];
-	extern char username[],passwd[];
+//	extern char username[],passwd[];
 	sscanf(req,"/delete/%[^/]/php_%[^_]_%[^.].jsp",abspath,user,pw);
 	chinese2host(abspath);
 	chinese2host(user);
 	sendHead(client);//200 OK
 //	info(passwd);
-	if(strcmp(user,username)==0
-			&&strncasecmp(pw,passwd,strlen(passwd))==0){
+	if(check_passwd(user,pw)==1){
 		if(delete_file(abspath)==0)
 			fputs("delete_ok",client);
 		else fputs("delete_error",client);//file not exists or write protected
