@@ -1,0 +1,6 @@
+bin/
+backup/
+doc/
+picture/
+wxPython/*.html
+

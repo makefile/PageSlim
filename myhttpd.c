@@ -16,22 +16,27 @@ int main(int argc,char **argv){
 	struct sockaddr_in addr;
 	int sock_fd;
 	unsigned int addrlen;
+	/**
+	设置信号处理器，kill默认是-15 SIGTERM，而Ctrl+C是-2,SIGINT
+	must placed before init_daemon,for that will igore these signal 
+	*/
+//	(void)signal(SIGINT, sig_handler);
+//	(void)signal(SIGTERM,sig_handler);
 	if((indexHtml=init_read(indexHtml))==(char*)0) return -1;
+	info("before daemin");
 	if(argc>1 &&strcmp("-d",argv[1])==0) init_daemon(argv[0],LOG_INFO);
+
 //micro define determine whether to compile the code segment
 #if defined __DEBUG
 #else
 	init_daemon(argv[0],LOG_INFO);//运行守护进程
 #endif
-/**
-设置信号处理器，kill默认是-15 SIGTERM，而Ctrl+C是-2,SIGINT
-*/
-	(void)signal(SIGINT, sig_handler);
-	(void)signal(SIGTERM,sig_handler);
+	
 	if(getAllArg()==0){//return >0 if read sucess
 		info("PANIC:can't locate configuration file");
 		exit(-1);//从配置文件读取参数
 	}//get args:home_dir,webpage_root etc.
+	info("after daemon");
 	if((sock_fd=socket(PF_INET,SOCK_STREAM,0))<0){
 		info("socket()");//对syslog(LOG_INFO,"%s",msg)的包装
 		exit(-1);
@@ -40,7 +45,7 @@ int main(int argc,char **argv){
 	setsockopt(sock_fd,SOL_SOCKET,SO_REUSEADDR,&addrlen,sizeof(addrlen));//容许重用本地地址和端口
 	addr.sin_family=AF_INET;
 	addr.sin_port=htons(atoi(port));
-	addr.sin_addr.s_addr=inet_addr(ip);
+	addr.sin_addr.s_addr=inet_addr(ip);//INADDR_ANY;
 	addrlen=sizeof(struct sockaddr_in);
 	if(bind(sock_fd,(struct sockaddr*)&addr,addrlen)<0){
 		info(ip);
@@ -50,6 +55,7 @@ int main(int argc,char **argv){
 	if(listen(sock_fd,atoi(back))<0){
 		info("listen");exit(-1);
 	}
+	info("after daemon");
 	int new_fd;
 	while(1){
 		//addrlen=sizeof(struct sockaddr_in);

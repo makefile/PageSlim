@@ -1,0 +1,2 @@
+#!/bin/bash
+./pid | awk '{print $1}' |xargs kill

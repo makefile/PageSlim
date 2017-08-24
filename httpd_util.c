@@ -19,7 +19,8 @@ void init_daemon(const char *pname,int facility){
 	open("/dev/null",O_RDONLY);
 	open("/dev/null",O_RDWR);//描述符0,1,2都定向到null
 	open("/dev/null",O_RDWR);
-	chdir("/tmp");//修改主目录
+//	chdir("/tmp");//修改主目录
+//because still need relative path,so don't chdir
 	umask(0);//重置文件掩码
 	signal(SIGCHLD,SIG_IGN);
 	openlog(pname,LOG_PID,facility);
@@ -117,6 +118,10 @@ int getAllArg(){//上面的get_arg写的罗嗦了一些，但为了方便以后�
 	sprintf(port,"%s","80");//默认80
 	sprintf(back,"%s","5");
 	fp=fopen("etc/my_httpd.conf","r");
+	if(fp==NULL){
+		info("server conf not exist");
+		return 0;
+	}
 	while(!feof(fp)){
 		fgets(line,sizeof(line),fp);  //读取一行
 		if(strlen(line)<2) continue;//null or #
@@ -124,6 +129,7 @@ int getAllArg(){//上面的get_arg写的罗嗦了一些，但为了方便以后�
 	}
 	fclose(fp);
 	if(strlen(ip)==0) get_addr("eth0");//本机ip
+//if we set INADDR_ANY,there maybe no need to get eth0
 	/*if(get_arg("ip",buf,ip)==0) {
 		//info("get arg ip ==0:");info(ip);
 		get_addr("eth0");//本机ip

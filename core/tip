@@ -1,0 +1,74 @@
+临时文件放到/dev/shm中（/run/shm,有权限操作）
+使用系统剪贴板，点击程序时从剪贴板复制出来
+RichTextCtrl的AddImage方法http://www.wxpython.org/docs/api/wx.richtext.RichTextCtrl-class.html
+wx.richtext里的RichTextCtrl方法提供的多媒体文本编辑器的构架。
+
+    import wx.richtext as rt
+
+    rtc = rt.RichTextCtrl(self.panel, size = (800, 400));
+    rtc.SetBackgroundColour(wx.Colour(166, 255, 166))
+    #wx.CallAfter(rtc.SetFocus)
+    #布局
+    rtc.BeginParagraphSpacing(0, 10)
+    rtc.BeginAlignment(rt.TEXT_ALIGNMENT_CENTRE)
+    rtc.BeginBold()
+    rtc.BeginFontSize(15)
+    rtc.WriteText("----欢迎来到系统主页----")
+    rtc.EndFontSize()
+    rtc.EndBold()
+    rtc.Newline()
+    rtc.BeginAlignment(rt.TEXT_ALIGNMENT_CENTRE)
+    rtc.WriteImage(wx.Image('image\\main.png',wx.BITMAP_TYPE_PNG), bitmapType = wx.BITMAP_TYPE_PNG)
+
+    #  注意WriteImage里的参数设置就行了，本人试验出来的结果。本文用的是相对路径
+    rtc.Newline()
+     rtc.EndAlignment()
+
+在wxpython编程中，wx.Toolbook的使用方法跟wx.Notebook的使用类似，但是由于前者的应用会提高界面的美观程度， 因此我们更倾向于使用wx.Toolbook。
+1、先创建一个父类窗口
+class Frame2(wx.Frame):
+    ……
+    self.tb  = TestTB(self, ID) 
+ 
+2、创建Toolbook类
+class TestTB(wx.Toolbook):
+    def __init__(self, parent, id):
+    wx.Toolbook.__init__(self, parent, id, size = (800, 400), style=       #注意：size一定要设置，我在次纠结了一个下午才发现问题
+                             wx.BK_DEFAULT
+                            )
+        il = wx.ImageList(48, 48)    #建议跟图像的大小一致
+        bmp0 = wx.Image('icon\\0.png',wx.BITMAP_TYPE_PNG).ConvertToBitmap()   #图像的路径为相对路径，也可以设置成绝对路径
+        bmp1 = wx.Image('icon\\1.png',wx.BITMAP_TYPE_PNG).ConvertToBitmap()
+        bmp2 = wx.Image('icon\\2.png',wx.BITMAP_TYPE_PNG).ConvertToBitmap()
+        bmp3 = wx.Image('icon\\3.png',wx.BITMAP_TYPE_PNG).ConvertToBitmap()
+        index0 = il.Add(bmp0)
+        index1 = il.Add(bmp1)
+        index2 = il.Add(bmp2)
+        index3 = il.Add(bmp3)
+        #print index3
+        #print il.GetImageCount()
+        self.AssignImageList(il)
+        #p = newPanel(None)
+        win1 = wx.Panel(self, 1)
+        win1.SetBackgroundColour(wx.Colour(166, 255, 166))
+        self.AddPage(win1, "    首    页    ", imageId = index0)
+        win2 = wx.Panel(self, 2)
+        win2.SetBackgroundColour(wx.Colour(166, 255, 166))
+        self.AddPage(win2, "    信息录入    ", imageId = index1)
+        win1 = wx.Panel(self, 3)
+        win1.SetBackgroundColour(wx.Colour(166, 255, 166))
+        self.AddPage(win1, "    成本分析    ", imageId = index2)
+        win2 = wx.Panel(self, 4)
+        win2.SetBackgroundColour(wx.Colour(166, 255, 166))
+        self.AddPage(win2, "    利润分析    ", imageId = index3)
+ 
+3、父窗口如何识别切换到哪一标签下
+self.tb.Bind(wx.EVT_TOOLBOOK_PAGE_CHANGED, self.OnPageChanged)  #事件
+#事件响应
+def OnPageChanged(self, event):
+        old = event.GetOldSelection()
+        new = event.GetSelection()
+        sel = self.tb.GetSelection()
+        print 'OnPageChanged,  old:%d, new:%d, sel:%d\n' % (old, new, sel)
+        event.Skip()
+注：主要根据sel来判断切换到哪一标签了。

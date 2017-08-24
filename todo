@@ -1,0 +1,5 @@
+定义宏定义来决定数组的大小，去掉编译时的栈溢出不检测的选项
+对webpage_root下的文件构造html,
+改客户端的存放catalog
+URL rewrite,^blog/([0-9]{4})/([0-9]{2})/?$  blog/posts.php?year=$1&month=$2 last (Nginx,Apache..)
+

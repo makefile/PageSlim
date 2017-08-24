@@ -1,0 +1,23 @@
+{
+	"/home/fyk/my_httpd":	{
+		"file":	"/home/fyk/my_httpd/my_httpd.conf",
+		"/home/fyk/my_httpd/default":	{
+			"/home/fyk/my_httpd/default/新闻":	{
+		}
+		},
+		"/home/fyk/my_httpd/blog":	{
+			"/home/fyk/my_httpd/blog/android":	{
+				"/home/fyk/my_httpd/blog/android/test":	{
+			}
+			}
+		},
+		"/home/fyk/my_httpd/upload":	{
+			"/home/fyk/my_httpd/upload/java":	{
+		},
+			"/home/fyk/my_httpd/upload/c":	{
+		},
+			"/home/fyk/my_httpd/upload/python":	{
+		}
+		}
+	}
+}
